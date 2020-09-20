@@ -5,7 +5,6 @@
  * Created on September 14, 2020, 10:15 PM
  */
 
-
 #include "xc.h"
 #include <stdio.h>
 #include "configuration.h"
@@ -18,19 +17,12 @@
 #define Motor2_PWM 1
 #define Motor2_B 2
 
-#define PWM_period 5000 //set period to 15,625 tick per cycle 
+#define PWM_period 5000 //set period to 15,625 tick per cycle
 
 //interrupt variable
 volatile unsigned long millis = 0;
 volatile char HomeX = 0;
 volatile char HomeY = 0;
-
-void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) //timer of system
-{
-    millis++; //plus every 1 ms
-    _T1IF = 0; //clear interrupt flag
-}
-
 void initPLL() {
     PLLFBD = 150; // M  = 152
     CLKDIVbits.PLLPRE = 5; // N1 = 7
@@ -43,23 +35,27 @@ void initPLL() {
     __builtin_write_OSCCONL(0x01); // Start clock switching
 
     while (OSCCONbits.COSC != 0b001); // Wait for Clock switch to occur
-    while (OSCCONbits.LOCK != 1) {
-    }; // Wait for PLL to lock
+    while (OSCCONbits.LOCK != 1); // Wait for PLL to lock
 }
 
-void __attribute__((interrupt, no_auto_psv)) _INT0Interrupt(void) {
+void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {//timer of system
+    millis++; //plus every 1 ms
+    _T1IF = 0; //clear interrupt flag
+}
+
+void __attribute__((interrupt, no_auto_psv)) _INT0Interrupt(void){
     LATA ^= 0x0001;
     IFS0bits.INT0IF = 0;
 }
 
-void __attribute__((interrupt, no_auto_psv)) _INT1Interrupt(void) {
+void __attribute__((interrupt, no_auto_psv)) _INT1Interrupt(void){
     LATB &= ((0x0001 << Motor1_A)^0xFFFF);
     LATB &= ((0x0001 << Motor1_B)^0xFFFF);
     HomeX++;
     IFS1bits.INT1IF = 0;
 }
 
-void __attribute__((interrupt, no_auto_psv)) _INT2Interrupt(void) {
+void __attribute__((interrupt, no_auto_psv)) _INT2Interrupt(void){
     LATB &= ((0x0001 << Motor2_A)^0xFFFF);
     LATB &= ((0x0001 << Motor2_B)^0xFFFF);
     HomeY++;
@@ -144,7 +140,7 @@ int main(void) {
     TRISA = 0xFFFE;
 
     _T1IE = 1; //enable interrupt for timer1
-    _T1IP = 3;
+    _T1IP = 3; //priority interrupt for timer1
 
     __builtin_enable_interrupts();
 
