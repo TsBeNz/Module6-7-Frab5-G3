@@ -62,7 +62,7 @@ void __attribute__((interrupt, no_auto_psv)) _INT2Interrupt(void){
     IFS1bits.INT2IF = 0;
 }
 
-void motor_driveX(int direction,int speed) {
+void motor_driveX(char direction,unsigned char speed) {
     unsigned long pwm = speed*((unsigned long)PWM_period);
     pwm/=100;
     OC1RS = pwm;
@@ -79,7 +79,7 @@ void motor_driveX(int direction,int speed) {
     }
 }
 
-void motor_driveY(int direction,int speed) {
+void motor_driveY(char direction,unsigned char speed) {
     unsigned long pwm = speed*((unsigned long)PWM_period);
     pwm/=100;
     OC2RS = pwm;

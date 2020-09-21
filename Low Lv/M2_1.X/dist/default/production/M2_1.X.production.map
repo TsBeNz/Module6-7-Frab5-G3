@@ -152,10 +152,10 @@ section                    address   length (PC units)   length (bytes) (dec)
 -------                    -------   -----------------   --------------------
 .text                        0x200              0x1120          0x19b0  (6576)
 .const                      0x1320                0x1c            0x2a  (42)
-.text                       0x133c               0x2c6           0x429  (1065)
-.dinit                      0x1602                0xc2           0x123  (291)
+.text                       0x133c               0x2ca           0x42f  (1071)
+.dinit                      0x1606                0xc2           0x123  (291)
 
-                 Total "program" memory used (bytes):         0x1f26  (7974) 12%
+                 Total "program" memory used (bytes):         0x1f2c  (7980) 12%
 
 
 "data" Memory  [Origin = 0x800, Length = 0x4000]
@@ -258,8 +258,8 @@ External Symbols in Program Memory (by address):
                   0x0012c4                  ___moddi3
                   0x00133c                  _initPLL
                   0x001390                  _motor_driveX
-                  0x00140a                  _motor_driveY
-                  0x001478                  _main
+                  0x00140c                  _motor_driveY
+                  0x00147c                  _main
                   0xf80000                  __FBS.sec
                   0xf80002                  __FSS.sec
                   0xf80004                  __FGS.sec
@@ -306,12 +306,12 @@ External Symbols in Program Memory (by name):
                   0x000b00                  _free
                   0x000b64                  _fwrite
                   0x00133c                  _initPLL
-                  0x001478                  _main
+                  0x00147c                  _main
                   0x000c72                  _malloc
                   0x000cc6                  _memchr
                   0x0005b2                  _memcpy
                   0x001390                  _motor_driveX
-                  0x00140a                  _motor_driveY
+                  0x00140c                  _motor_driveY
                   0x00044a                  _puts
                   0x000cda                  _strchr
                   0x0005c0                  _strlen
@@ -512,17 +512,17 @@ usercode
 
 __FBS             0xf80000          0x2
  *(__FBS.sec*)
- __FBS.sec        0xf80000          0x2 /CW/_FBS
+ __FBS.sec        0xf80000          0x2 /CW/_FBSÿsˆ
                   0xf80000                  __FBS.sec
 
 __FSS             0xf80002          0x2
  *(__FSS.sec*)
- __FSS.sec        0xf80002          0x2 /CW/_FSSà”Ú
+ __FSS.sec        0xf80002          0x2 /CW/_FSS‡Éˆ
                   0xf80002                  __FSS.sec
 
 __FGS             0xf80004          0x2
  *(__FGS.sec*)
- __FGS.sec        0xf80004          0x2 /CW/_FGS¿CÛ
+ __FGS.sec        0xf80004          0x2 /CW/_FGSê„ı
                   0xf80004                  __FGS.sec
 
 __FOSCSEL
@@ -1682,9 +1682,9 @@ LOAD c:/program files (x86)/microchip/xc16/v1.36/bin/bin/../../lib\libm-elf.a
 LOAD c:/program files (x86)/microchip/xc16/v1.36/bin/bin/../../lib\liblega-c-elf.a
 END GROUP
 OUTPUT(dist/default/production/M2_1.X.production.elf elf32-pic30)
-LOAD /CW/_FGS¿CÛ
-LOAD /CW/_FSSà”Ú
-LOAD /CW/_FBS
+LOAD /CW/_FGSê„ı
+LOAD /CW/_FSS‡Éˆ
+LOAD /CW/_FBSÿsˆ
 LOAD jump_table
 LOAD default_isr
 LOAD data_init
@@ -1842,12 +1842,12 @@ __c30_signature
 .const              0x9320         0x1c load address 0x001320  
  .const             0x9320         0x1c build/default/production/Main.o
 
-.text             0x00133c        0x2c6
- .text            0x00133c        0x2c6 build/default/production/Main.o
+.text             0x00133c        0x2ca
+ .text            0x00133c        0x2ca build/default/production/Main.o
                   0x00133c                  _initPLL
                   0x001390                  _motor_driveX
-                  0x00140a                  _motor_driveY
-                  0x001478                  _main
+                  0x00140c                  _motor_driveY
+                  0x00147c                  _main
 
-.dinit            0x001602         0xc2
- .dinit           0x001602         0xc2 data_init
+.dinit            0x001606         0xc2
+ .dinit           0x001606         0xc2 data_init
