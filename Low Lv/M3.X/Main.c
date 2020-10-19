@@ -17,7 +17,7 @@ volatile int count = 0;
 volatile float cui_pose = 0;
 volatile int Em_Stop = 0, set_home_x_f = 0, set_home_y_f = 0;
 volatile int32_t pre_x_error = 0, pre_y_error = 0;
-volatile unsigned int x_pos = 0 , y_pos = 0;
+volatile unsigned int x_pos = 500, y_pos = 500;
 
 #define PI 3.14159265
 #define INPUT_VOLTAGE 12
@@ -30,45 +30,6 @@ volatile unsigned int x_pos = 0 , y_pos = 0;
 #define k_d_x 10
 #define k_p_y 0
 #define k_d_y 0
-
-void pid_xy(unsigned int x_pos ,unsigned int y_pos){
-    int32_t error_x = (int32_t)(x_pos -  (unsigned int)POS1CNT);
-    int32_t error_y = (int32_t)(y_pos -  (unsigned int)POS2CNT);
-    int32_t d_term_x = error_x - pre_x_error;
-    int32_t d_term_y = error_y - pre_y_error;
-    int32_t x_pwm = (k_p_x*error_x + k_d_x*d_term_x)/10000 ;
-    int32_t y_pwm = (k_p_y*error_y + k_d_y*d_term_y)/10000 ;
-    OC1RS = abs(x_pwm);
-    OC2RS = abs(y_pwm);
-    if (abs(x_pwm) <= 100){
-        _LATA0 = 1;
-        _LATA1 = 1;
-    }
-    else if (x_pwm > 0){
-        _LATA0 = 1;
-        _LATA1 = 0;
-    }
-    else{
-        _LATA0 = 0;
-        _LATA1 = 1;
-    }
-    
-    if (abs(y_pwm) <= 100){
-        _LATA4 = 1;
-        _LATB4 = 1;
-    }
-    else if (y_pwm > 0){
-        _LATA4 = 1;
-        _LATB4 = 0;
-    }
-    else{
-        _LATA4 = 0;
-        _LATB4 = 1;
-    }
-    pre_x_error = error_x;
-    pre_y_error = error_y;
-    
-}
 
 void motor_driveX(int speed) {
     if ((int) speed == 1) {
@@ -104,6 +65,14 @@ void motor_driveY(int speed) {
     OC2RS = pwm;
 }
 
+void delay(int time_ms){
+    unsigned int i = 0;
+    for (i = 0; i < time_ms; i++) {
+        unsigned int j;
+        for (j = 0; j < 4000; j++)Nop();
+    }
+}
+
 void __attribute__((interrupt, no_auto_psv)) _INT0Interrupt(void) {
     _LATA0 = 0;
     _LATA1 = 0;
@@ -128,14 +97,42 @@ void __attribute__((interrupt, no_auto_psv)) _INT2Interrupt(void) {
 }
 
 void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
-    //timer of system
-//    printf("%u %u\n", POS1CNT, POS2CNT);
-    //        printf("%u %u\n",_RA4,_RB4);
-    pid_xy(x_pos,y_pos);
+    int32_t error_x = (int32_t) (x_pos - (unsigned int) POS1CNT);
+    int32_t error_y = (int32_t) (y_pos - (unsigned int) POS2CNT);
+    int32_t d_term_x = error_x - pre_x_error;
+    int32_t d_term_y = error_y - pre_y_error;
+    int32_t x_pwm = (k_p_x * error_x + k_d_x * d_term_x) / 10000;
+    int32_t y_pwm = (k_p_y * error_y + k_d_y * d_term_y) / 10000;
+    OC1RS = abs(x_pwm);
+    OC2RS = abs(y_pwm);
+    if (abs(x_pwm) <= 100) {
+        _LATA0 = 1;
+        _LATA1 = 1;
+    } else if (x_pwm > 0) {
+        _LATA0 = 1;
+        _LATA1 = 0;
+    } else {
+        _LATA0 = 0;
+        _LATA1 = 1;
+    }
+
+    if (abs(y_pwm) <= 100) {
+        _LATA4 = 1;
+        _LATB4 = 1;
+    } else if (y_pwm > 0) {
+        _LATA4 = 1;
+        _LATB4 = 0;
+    } else {
+        _LATA4 = 0;
+        _LATB4 = 1;
+    }
+    pre_x_error = error_x;
+    pre_y_error = error_y;
     _T1IF = 0; //clear interrupt flag
 }
 
 void set_home() {
+    T1CONbits.TON = 0;
     set_home_x_f = 1;
     int x_set = 1;
     int y_set = 1;
@@ -143,9 +140,7 @@ void set_home() {
     while (_RB2) {
         motor_driveX(20);
     }
-    unsigned int i;
-    for (i = 0; i < 60000; i++)Nop();
-    motor_driveX(-7);
+    delay(500);
     while (set_home_x_f) {
         if (!set_home_x_f && x_set) {
             motor_driveX(0);
@@ -158,26 +153,15 @@ void set_home() {
     }
     _LATA0 = 1;
     _LATA1 = 1;
-    i = 0;
-    for (i = 0; i < 60000; i++)Nop();
-    i = 0;
-    for (i = 0; i < 60000; i++)Nop();
-    i = 0;
-    for (i = 0; i < 60000; i++)Nop();
-    i = 0;
-    for (i = 0; i < 60000; i++)Nop();
-    i = 0;
-    for (i = 0; i < 60000; i++)Nop();
-    i = 0;
-    for (i = 0; i < 60000; i++)Nop();
+    delay(500);
+    
     POS1CNT = 0;
-
+    
     set_home_y_f = 1;
     while (_RB3) {
         motor_driveY(20);
     }
-    i = 0;
-    for (i = 0; i < 60000; i++)Nop();
+    delay(500);
     motor_driveY(-7);
     while (set_home_y_f) {
         if (!set_home_y_f && y_set) {
@@ -191,14 +175,10 @@ void set_home() {
     }
     _LATA4 = 1;
     _LATB4 = 1;
-    i = 0;
-    for (i = 0; i < 60000; i++)Nop();
-    i = 0;
-    for (i = 0; i < 60000; i++)Nop();
-    i = 0;
-    for (i = 0; i < 60000; i++)Nop();
+    delay(500);  
     POS2CNT = 0;
     printf("set home finish\n");
+    T1CONbits.TON = 1;
 }
 
 void initPLL() {
@@ -293,7 +273,6 @@ void start_program(void) {
     /*enable global interrupt*/
     UART1_Initialize(86, 347);
     __builtin_enable_interrupts();
-    T1CONbits.TON = 1; //enable timer1
     T2CONbits.TON = 1; //enable timer2
     T3CONbits.TON = 1;
 
@@ -331,16 +310,15 @@ void demo_move1() {
     while (true)Nop();
 }
 
-void demo_move2(){
+void demo_move2() {
     x_pos = 30000;
     y_pos = 30000;
-    while(POS2CNT < 30000)Nop();
+    while (POS2CNT < 30000)Nop();
+    delay(500);
     x_pos = 500;
     y_pos = 500;
-    while(POS2CNT > 500)Nop();
-    
-    
-    
+    while (POS2CNT > 500)Nop();
+    delay(500);
 }
 
 int main(void) {
@@ -351,7 +329,8 @@ int main(void) {
             Em_Stop = 0;
             printf("Em \n");
         }
-//        demo_move1();
+        //        demo_move1();
+        demo_move2();
     }
     return 0;
 }
