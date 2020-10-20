@@ -24,7 +24,12 @@ volatile unsigned int x_pos = 500, y_pos = 500;
 
 #define PWM_period 10000
 #define SERVO_period 10000
-#define int_period 50000
+#define t1_prescaler 0b01
+#define t1_period 25000
+#define t4_prescaler 0b01
+#define t4_period 25000
+#define t5_prescaler 0b01
+#define t5_period 25000
 
 #define k_p_x 10
 #define k_d_x 10
@@ -131,6 +136,14 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
     _T1IF = 0; //clear interrupt flag
 }
 
+void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void) {    
+    _T4IF = 0; //clear interrupt flag
+}
+
+void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void) {    
+    _T5IF = 0; //clear interrupt flag
+}
+
 void set_home() {
     T1CONbits.TON = 0;
     set_home_x_f = 1;
@@ -202,13 +215,17 @@ void start_program(void) {
     __builtin_disable_interrupts();
 
     initPLL();
-    T1CONbits.TCKPS = 0b01;
+    T1CONbits.TCKPS = t1_prescaler;
     T2CONbits.TCKPS = 0b01; //set timer prescaler to 1:8 Motor
-    T3CONbits.TCKPS = 0b01; //set timer prescaler to 1:8 servo
-    PR1 = int_period; //set period to 1 ms
+    T3CONbits.TCKPS = 0b01; //set timer prescaler to 1:8 servoT1CONbits.TCKPS = t1_prescaler;
+    T4CONbits.TCKPS = t4_prescaler;
+    T5CONbits.TCKPS = t5_prescaler;
+    PR1 = t1_period; //set period to 1 ms
     PR2 = PWM_period; //set period to 15,625 tick per cycle
     PR3 = SERVO_period;
-
+    PR4 = t4_period;
+    PR5 = t5_period;
+    
     OC1RS = 0;
     OC1CONbits.OCM = 0b000; //Disable Output Compare Module
     OC1CONbits.OCTSEL = 0; //OC1 use timer2 as counter source
@@ -264,7 +281,11 @@ void start_program(void) {
     _INT2IP = 7; //priority
 
     _T1IE = 1; //enable interrupt for timer1
+    _T4IE = 1; //enable interrupt for timer4
+    _T5IE = 1; //enable interrupt for timer5
     _T1IP = 3; //priority interrupt for timer1
+    _T4IP = 3; //priority interrupt for timer4  
+    _T5IP = 3; //priority interrupt for timer5
 
     AD1PCFGL = 0xFFFF; //set analog input to digital pin
     TRISB = 0x0FEC;
@@ -275,6 +296,8 @@ void start_program(void) {
     __builtin_enable_interrupts();
     T2CONbits.TON = 1; //enable timer2
     T3CONbits.TON = 1;
+    T4CONbits.TON = 1;
+    T5CONbits.TON = 1;
 
     _LATA0 = 0;
     _LATA1 = 0;
