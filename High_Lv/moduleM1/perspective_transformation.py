@@ -119,10 +119,10 @@ def Perspective(camara_source=0, setup_workspace=True):
                     # (rvec - tvec).any()  # get rid of that nasty numpy value array error
                     aruco.drawDetectedMarkers(dst, corners)  # Draw A square around the markers
                     aruco.drawAxis(dst, mtx ,dist, rvec, tvec, 0.01)  # Draw Axis
-        cv2.circle(dst, (int(ax), int(ay)), 2, (0, 0, 255), -1)
-        cv2.circle(dst, (int(bx), int(by)), 2, (0, 0, 255), -1)
-        cv2.circle(dst, (int(cx), int(cy)), 2, (0, 0, 255), -1)
-        cv2.circle(dst, (int(dx), int(dy)), 2, (0, 0, 255), -1)
+        # cv2.circle(dst, (int(ax), int(ay)), 1, (0, 0, 255), -1)
+        # cv2.circle(dst, (int(bx), int(by)), 1, (0, 0, 255), -1)
+        # cv2.circle(dst, (int(cx), int(cy)), 1, (0, 0, 255), -1)
+        # cv2.circle(dst, (int(dx), int(dy)), 1, (0, 0, 255), -1)
         cv2.imshow("undis",dst)
 
         # Perspective Transform

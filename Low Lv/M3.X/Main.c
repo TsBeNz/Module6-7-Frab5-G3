@@ -11,30 +11,27 @@
 #include "UART_rev3.h"
 #include <math.h>
 
-volatile float timer = 0;
-volatile float output = 0;
-volatile int count = 0;
-volatile float cui_pose = 0;
-volatile int Em_Stop = 0, set_home_x_f = 0, set_home_y_f = 0;
-volatile int32_t pre_x_error = 0, pre_y_error = 0;
-volatile unsigned int x_pos = 500, y_pos = 500;
+volatile char Em_Stop = 0, set_home_x_f = 0, set_home_y_f = 0;
+volatile long int pre_x_error = 0, pre_y_error = 0, i_term_x = 0, i_term_y = 0, x_pos = 500, y_pos = 500;
+volatile float x_speed = 0.0, y_speed = 0.0, pre_speed_error_x = 0, pre_speed_error_y = 0, speed_i_term_x = 0, speed_i_term_y = 0;
+volatile long int pre_pos = 0;
 
 #define PI 3.14159265
-#define INPUT_VOLTAGE 12
 
-#define PWM_period 10000
+#define PWM_period 16667
 #define SERVO_period 10000
 #define t1_prescaler 0b01
-#define t1_period 25000
+#define t1_period 50000
 #define t4_prescaler 0b01
-#define t4_period 25000
+#define t4_period 50000
 #define t5_prescaler 0b01
-#define t5_period 25000
+#define t5_period 60000
+#define T_speed 0.01
 
-#define k_p_x 10
-#define k_d_x 10
-#define k_p_y 0
-#define k_d_y 0
+#define k_p_x 9
+#define k_d_x 2
+#define k_p_y 9
+#define k_d_y 5
 
 void motor_driveX(int speed) {
     if ((int) speed == 1) {
@@ -70,11 +67,12 @@ void motor_driveY(int speed) {
     OC2RS = pwm;
 }
 
-void delay(int time_ms){
+void delay(int time_ms) {
     unsigned int i = 0;
     for (i = 0; i < time_ms; i++) {
         unsigned int j;
-        for (j = 0; j < 4000; j++)Nop();
+        for (j = 0; j < 4000; j++)
+            Nop();
     }
 }
 
@@ -91,6 +89,17 @@ void __attribute__((interrupt, no_auto_psv)) _INT1Interrupt(void) {
     if (set_home_x_f) {
         set_home_x_f = 0;
     }
+    //    else if (T1CONbits.TON == 1){
+    //    T1CONbits.TON = 0;
+    //    delay(10);
+    //    _LATA0 = 0;
+    //    _LATA1 = 0;
+    //    _LATA4 = 0;
+    //    _LATB4 = 0;
+    //    }
+    //    else if (T1CONbits.TON == 0){
+    //    T1CONbits.TON = 1;
+    //    }
     IFS1bits.INT1IF = 0;
 }
 
@@ -98,22 +107,47 @@ void __attribute__((interrupt, no_auto_psv)) _INT2Interrupt(void) {
     if (set_home_y_f) {
         set_home_y_f = 0;
     }
+    //    else if (T1CONbits.TON == 1){
+    //    T1CONbits.TON = 0;
+    //    delay(10);
+    //    _LATA0 = 0;
+    //    _LATA1 = 0;
+    //    _LATA4 = 0;
+    //    _LATB4 = 0;
+    //    }
+    //    else if (T1CONbits.TON == 0){
+    //    T1CONbits.TON = 1;
+    //    }
     IFS1bits.INT2IF = 0;
 }
 
 void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
-    int32_t error_x = (int32_t) (x_pos - (unsigned int) POS1CNT);
-    int32_t error_y = (int32_t) (y_pos - (unsigned int) POS2CNT);
-    int32_t d_term_x = error_x - pre_x_error;
-    int32_t d_term_y = error_y - pre_y_error;
-    int32_t x_pwm = (k_p_x * error_x + k_d_x * d_term_x) / 10000;
-    int32_t y_pwm = (k_p_y * error_y + k_d_y * d_term_y) / 10000;
-    OC1RS = abs(x_pwm);
-    OC2RS = abs(y_pwm);
-    if (abs(x_pwm) <= 100) {
+    long int error_x = (long int) (x_pos - (long int) POS1CNT);
+    long int error_y = (long int) (y_pos - (long int) POS2CNT);
+    long int d_term_x = error_x - pre_x_error;
+    long int d_term_y = error_y - pre_y_error;
+    long int x_pwm = (long int) (k_p_x * error_x + k_d_x * d_term_x);
+    long int y_pwm = (long int) (k_p_y * error_y + k_d_y * d_term_y);
+
+    if (x_pwm >= PWM_period) {
+        x_pwm = PWM_period;
+    } else if (x_pwm <= -PWM_period) {
+        x_pwm = PWM_period;
+    }
+
+    if (y_pwm >= PWM_period) {
+        y_pwm = PWM_period;
+    } else if (y_pwm <= -PWM_period) {
+        y_pwm = PWM_period;
+    }
+
+    OC1RS = (unsigned int) abs(x_pwm);
+    OC2RS = (unsigned int) abs(y_pwm);
+
+    if (abs(error_x) <= 50) {
         _LATA0 = 1;
         _LATA1 = 1;
-    } else if (x_pwm > 0) {
+    } else if (x_pos > (unsigned int) POS1CNT) {
         _LATA0 = 1;
         _LATA1 = 0;
     } else {
@@ -121,10 +155,10 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
         _LATA1 = 1;
     }
 
-    if (abs(y_pwm) <= 100) {
+    if (abs(error_y) <= 50) {
         _LATA4 = 1;
         _LATB4 = 1;
-    } else if (y_pwm > 0) {
+    } else if (y_pos > (unsigned int) POS2CNT) {
         _LATA4 = 1;
         _LATB4 = 0;
     } else {
@@ -133,14 +167,24 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
     }
     pre_x_error = error_x;
     pre_y_error = error_y;
+//    printf("%lu %lu %ld %ld\n", (long int) x_pos, (long int) POS1CNT, x_pwm, error_x);
+    //        printf("%lu %lu %ld %ld\n",(long int)y_pos,(long int)POS2CNT,y_pwm,error_y);
     _T1IF = 0; //clear interrupt flag
 }
 
-void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void) {    
+void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void) {
+    //    long int s = (long int) POS1CNT - pre_pos;
+    //    if (s >= 32768) {
+    //        s -= 65535;
+    //    } else if (s <= -32768) {
+    //        s += 65535;
+    //    }
+    //    float v = (float)s / T_speed;
     _T4IF = 0; //clear interrupt flag
 }
 
-void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void) {    
+void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void) {
+    //    printf("%u %u\n",POS1CNT,POS2CNT);
     _T5IF = 0; //clear interrupt flag
 }
 
@@ -151,9 +195,10 @@ void set_home() {
     int y_set = 1;
     printf("sethome\n");
     while (_RB2) {
-        motor_driveX(20);
+        motor_driveX(30);
     }
     delay(500);
+    motor_driveX(-15);
     while (set_home_x_f) {
         if (!set_home_x_f && x_set) {
             motor_driveX(0);
@@ -162,20 +207,21 @@ void set_home() {
         }
     }
     while (_RB2) {
-        motor_driveX(2);
+        motor_driveX(10);
     }
     _LATA0 = 1;
     _LATA1 = 1;
-    delay(500);
-    
+    delay(300);
+
     POS1CNT = 0;
-    
+    printf("X set\n");
+
     set_home_y_f = 1;
     while (_RB3) {
-        motor_driveY(20);
+        motor_driveY(30);
     }
     delay(500);
-    motor_driveY(-7);
+    motor_driveY(-20);
     while (set_home_y_f) {
         if (!set_home_y_f && y_set) {
             motor_driveY(0);
@@ -184,12 +230,13 @@ void set_home() {
         }
     }
     while (_RB3) {
-        motor_driveY(2);
+        motor_driveY(10);
     }
     _LATA4 = 1;
     _LATB4 = 1;
-    delay(500);  
+    delay(300);
     POS2CNT = 0;
+    printf("Y set\n");
     printf("set home finish\n");
     T1CONbits.TON = 1;
 }
@@ -217,15 +264,15 @@ void start_program(void) {
     initPLL();
     T1CONbits.TCKPS = t1_prescaler;
     T2CONbits.TCKPS = 0b01; //set timer prescaler to 1:8 Motor
-    T3CONbits.TCKPS = 0b01; //set timer prescaler to 1:8 servoT1CONbits.TCKPS = t1_prescaler;
+    T3CONbits.TCKPS = 0b01; //set timer prescaler to 1:8 servo
     T4CONbits.TCKPS = t4_prescaler;
     T5CONbits.TCKPS = t5_prescaler;
-    PR1 = t1_period; //set period to 1 ms
-    PR2 = PWM_period; //set period to 15,625 tick per cycle
+    PR1 = t1_period;
+    PR2 = PWM_period;
     PR3 = SERVO_period;
     PR4 = t4_period;
     PR5 = t5_period;
-    
+
     OC1RS = 0;
     OC1CONbits.OCM = 0b000; //Disable Output Compare Module
     OC1CONbits.OCTSEL = 0; //OC1 use timer2 as counter source
@@ -233,45 +280,45 @@ void start_program(void) {
 
     OC2RS = 0;
     OC2CONbits.OCM = 0b000; //Disable Output Compare Module
-    OC2CONbits.OCTSEL = 0; //OC1 use timer2 as counter source
+    OC2CONbits.OCTSEL = 0; //OC2 use timer2 as counter source
     OC2CONbits.OCM = 0b110; //set to pwm without fault pin mode
 
     OC3RS = 750;
     OC3CONbits.OCM = 0b000; //Disable Output Compare Module
-    OC3CONbits.OCTSEL = 1; //OC1 use timer2 as counter source
+    OC3CONbits.OCTSEL = 1; //OC3 use timer3 as counter source
     OC3CONbits.OCM = 0b110; //set to pwm without fault pin mode
 
     OC4RS = 750;
     OC4CONbits.OCM = 0b000; //Disable Output Compare Module
-    OC4CONbits.OCTSEL = 1; //OC1 use timer2 as counter source
+    OC4CONbits.OCTSEL = 1; //OC4 use timer3 as counter source
     OC4CONbits.OCM = 0b110; //set to pwm without fault pin mode
 
     __builtin_write_OSCCONL(OSCCON & 0xBF); //PPS RECONFIG UNLOCK
     RPINR18bits.U1RXR = 6;
     RPOR2bits.RP5R = 0b00011;
-    _QEA2R = 9; //remap RP14 connect to QEI1_A
-    _QEB2R = 8;
-    _QEA1R = 10; //remap RP14 connect to QEI2_A
-    _QEB1R = 11;
-    _RP0R = 0b10010; //remap RP15 connect to OC1
-    _RP1R = 0b10011; //remap RP15 connect to OC2
-    _RP13R = 0b10100; //remap RP15 connect to OC3
-    _RP12R = 0b10101; //remap RP15 connect to OC4
-    _INT1R = 2; //interrupts1
-    _INT2R = 3; //interrupts2
+    _QEA2R = 9; //remap connect to QEI1_A
+    _QEB2R = 8; //remap connect to QEI1_B
+    _QEA1R = 10; //remap connect to QEI2_A
+    _QEB1R = 11; //remap connect to QEI2_B
+    _RP0R = 0b10010; //remap connect to OC1
+    _RP1R = 0b10011; //remap connect to OC2
+    _RP13R = 0b10100; //remap connect to OC3
+    _RP12R = 0b10101; //remap connect to OC4
+    _INT1R = 2; //remap external interrupts1
+    _INT2R = 3; //remap external interrupts2
     __builtin_write_OSCCONL(OSCCON | 0x40); //PPS RECONFIG LOCK
 
-    QEI1CONbits.QEIM = 0b000; // QEI Mode disable
+    QEI1CONbits.QEIM = 0b000; // QEI1 Mode disable
     QEI1CONbits.PCDOUT = 0; // no direction pin out
     QEI1CONbits.QEIM = 0b101; // 2x ,no index
     DFLT1CONbits.QECK = 0b000; // clock divider Fcy/1
-    DFLT1CONbits.QEOUT = 1;
+    DFLT1CONbits.QEOUT = 1; // QEI1 Enable digital filter
 
-    QEI2CONbits.QEIM = 0b000; // QEI Mode disable
+    QEI2CONbits.QEIM = 0b000; // QEI2 Mode disable
     QEI2CONbits.PCDOUT = 0; // no direction pin out
     QEI2CONbits.QEIM = 0b101; // 2x ,no index
     DFLT2CONbits.QECK = 0b000; // clock divider Fcy/1
-    DFLT2CONbits.QEOUT = 1;
+    DFLT2CONbits.QEOUT = 1; // QEI2 Enable digital filter
 
     IEC0 |= 0x0001; //enable interrupts0
     IEC1 |= 0x2010; //enable interrupts1,2
@@ -284,20 +331,20 @@ void start_program(void) {
     _T4IE = 1; //enable interrupt for timer4
     _T5IE = 1; //enable interrupt for timer5
     _T1IP = 3; //priority interrupt for timer1
-    _T4IP = 3; //priority interrupt for timer4  
-    _T5IP = 3; //priority interrupt for timer5
+    _T4IP = 1; //priority interrupt for timer4
+    _T5IP = 1; //priority interrupt for timer5
 
     AD1PCFGL = 0xFFFF; //set analog input to digital pin
     TRISB = 0x0FEC;
     TRISA = 0xFFEC;
-    //    LATB = 0x0008;
-    /*enable global interrupt*/
+
     UART1_Initialize(86, 347);
+    /*enable global interrupt*/
     __builtin_enable_interrupts();
     T2CONbits.TON = 1; //enable timer2
-    T3CONbits.TON = 1;
-    T4CONbits.TON = 1;
-    T5CONbits.TON = 1;
+    T3CONbits.TON = 1; //enable timer3
+    T4CONbits.TON = 1; //enable timer4
+    T5CONbits.TON = 1; //enable timer5
 
     _LATA0 = 0;
     _LATA1 = 0;
@@ -330,30 +377,60 @@ void demo_move1() {
     }
     motor_driveX(0);
     motor_driveY(0);
-    while (true)Nop();
+    while (true)
+        Nop();
 }
 
-void demo_move2() {
-    x_pos = 30000;
-    y_pos = 30000;
-    while (POS2CNT < 30000)Nop();
-    delay(500);
-    x_pos = 500;
-    y_pos = 500;
-    while (POS2CNT > 500)Nop();
-    delay(500);
+int demo_move2(int stage) {
+
+    if (stage == 0) {
+        if (POS2CNT <= 29900 || POS1CNT <= 29900) {
+            x_pos = 30000;
+            y_pos = 30000;
+        } else {
+            stage = 1;
+        }
+    }
+
+    if (stage == 1) {
+        if (POS2CNT >= 600 || POS1CNT >= 600) {
+            x_pos = 500;
+            y_pos = 500;
+        } else {
+            stage = 0;
+        }
+    }
+    return stage;
 }
 
 int main(void) {
     start_program();
     set_home();
+
+    int stage = 0;
+    int numByte;
+    uint8_t dataArray[10];
+
     while (1) {
         if (Em_Stop) {
             Em_Stop = 0;
             printf("Em \n");
         }
-        //        demo_move1();
-        demo_move2();
+        int output = demo_move2(stage);
+        stage = output;
+
+        numByte = UART1_ReadBuffer(dataArray, 10);
+        if (numByte != 0) {
+            int i;
+            for (i = 0; i < numByte; i++) {
+                printf("data = %c, %d\n", dataArray[i], i);
+            }
+        }
+
+        //        if (lastValue != POS1CNT) {
+        //            printf("%u\n", POS1CNT);
+        //            lastValue = POS1CNT;
+        //        }
     }
     return 0;
 }
