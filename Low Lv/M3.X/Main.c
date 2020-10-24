@@ -15,13 +15,14 @@ volatile char Em_Stop = 0, set_home_x_f = 0, set_home_y_f = 0;
 volatile long int pre_x_error = 0, pre_y_error = 0, i_term_x = 0, i_term_y = 0, x_pos = 500, y_pos = 500;
 volatile float x_speed = 0.0, y_speed = 0.0, pre_speed_error_x = 0, pre_speed_error_y = 0, speed_i_term_x = 0, speed_i_term_y = 0;
 volatile long int pre_pos = 0;
+volatile char x_set_ok = 0,y_set_ok = 0 , print_f = 0;
 
 #define PI 3.14159265
 
 #define PWM_period 16667
 #define SERVO_period 10000
 #define t1_prescaler 0b01
-#define t1_period 50000
+#define t1_period 2500
 #define t4_prescaler 0b01
 #define t4_period 50000
 #define t5_prescaler 0b01
@@ -30,7 +31,7 @@ volatile long int pre_pos = 0;
 
 #define k_p_x 9
 #define k_d_x 2
-#define k_p_y 9
+#define k_p_y 14
 #define k_d_y 5
 
 void motor_driveX(int speed) {
@@ -147,27 +148,33 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
     if (abs(error_x) <= 50) {
         _LATA0 = 1;
         _LATA1 = 1;
+        x_set_ok = 1;
     } else if (x_pos > (unsigned int) POS1CNT) {
         _LATA0 = 1;
         _LATA1 = 0;
+        x_set_ok = 0;
     } else {
         _LATA0 = 0;
         _LATA1 = 1;
+        x_set_ok = 0;
     }
 
     if (abs(error_y) <= 50) {
         _LATA4 = 1;
         _LATB4 = 1;
+        y_set_ok = 1;
     } else if (y_pos > (unsigned int) POS2CNT) {
         _LATA4 = 1;
         _LATB4 = 0;
+        y_set_ok = 0;
     } else {
         _LATA4 = 0;
         _LATB4 = 1;
+        y_set_ok = 0;
     }
     pre_x_error = error_x;
     pre_y_error = error_y;
-//    printf("%lu %lu %ld %ld\n", (long int) x_pos, (long int) POS1CNT, x_pwm, error_x);
+    //    printf("%lu %lu %ld %ld\n", (long int) x_pos, (long int) POS1CNT, x_pwm, error_x);
     //        printf("%lu %lu %ld %ld\n",(long int)y_pos,(long int)POS2CNT,y_pwm,error_y);
     _T1IF = 0; //clear interrupt flag
 }
@@ -184,7 +191,8 @@ void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void) {
 }
 
 void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void) {
-    //    printf("%u %u\n",POS1CNT,POS2CNT);
+    print_f = 1;
+//    printf("%u %u\n", POS1CNT, POS2CNT);
     _T5IF = 0; //clear interrupt flag
 }
 
@@ -203,7 +211,6 @@ void set_home() {
         if (!set_home_x_f && x_set) {
             motor_driveX(0);
             x_set = 0;
-            //            printf("X set\n");
         }
     }
     while (_RB2) {
@@ -226,7 +233,6 @@ void set_home() {
         if (!set_home_y_f && y_set) {
             motor_driveY(0);
             y_set = 0;
-            //            printf("Y set\n");
         }
     }
     while (_RB3) {
@@ -353,32 +359,8 @@ void start_program(void) {
 }
 
 void demo_move1() {
-    while (POS1CNT < 30000) {
-        motor_driveX(10);
-    }
-    while (POS1CNT > 500) {
-        motor_driveX(-10);
-    }
-    motor_driveX(0);
-    while (POS2CNT < 30000) {
-        motor_driveY(10);
-    }
-    while (POS2CNT > 500) {
-        motor_driveY(-10);
-    }
-    motor_driveY(0);
-    while (POS1CNT < 30000) {
-        motor_driveX(10);
-        motor_driveY(10);
-    }
-    while (POS1CNT > 500) {
-        motor_driveX(-10);
-        motor_driveY(-10);
-    }
-    motor_driveX(0);
-    motor_driveY(0);
-    while (true)
-        Nop();
+    x_pos = 30000;
+    y_pos = 30000;
 }
 
 int demo_move2(int stage) {
@@ -407,25 +389,70 @@ int main(void) {
     start_program();
     set_home();
 
-    int stage = 0;
+    //    int stage = 0;
     int numByte;
     uint8_t dataArray[10];
+    char status = 0;
+    char return_status = 0;
+    unsigned int x_buffer=0,y_buffer =0;
 
     while (1) {
         if (Em_Stop) {
             Em_Stop = 0;
             printf("Em \n");
         }
-        int output = demo_move2(stage);
-        stage = output;
+        //        int output = demo_move2(stage);
+        //        stage = output;
+//        demo_move1();
 
         numByte = UART1_ReadBuffer(dataArray, 10);
         if (numByte != 0) {
             int i;
             for (i = 0; i < numByte; i++) {
-                printf("data = %c, %d\n", dataArray[i], i);
+                if (dataArray[i] == 0xFF && status == 0){
+                    status = 1;
+                }
+                else if (dataArray[i] == 0xFF && status == 1){
+                    status = 2;
+                }
+                else if (status == 2){
+                    x_buffer |= dataArray[i];
+                    status = 3;
+                }
+                else if (status == 3){
+                    x_buffer |= dataArray[i]<<8;
+                    x_pos = (unsigned int)(x_buffer*102.4);
+                    x_buffer =0;
+                    status = 4;
+                }
+                else if (status == 4){
+                    y_buffer |= dataArray[i];
+                    status = 5;
+                }
+                else if (status == 5){
+                    y_buffer |= dataArray[i]<<8;
+                    y_pos = (unsigned int)(y_buffer*102.4);
+                    y_buffer =0;
+                    status = 0;
+                }
             }
         }
+    //    if (print_f == 1 && return_status == 0){
+    //        print_f = 0;
+    //        printf("%u %u\n", POS1CNT, POS2CNT);
+    //    }
+            
+        
+        if (x_set_ok == 1 && y_set_ok == 1){
+            if(return_status == 1){
+                printf("ok\n");
+                return_status = 0;
+            }
+        }
+        else{
+            return_status = 1;
+        }
+        
 
         //        if (lastValue != POS1CNT) {
         //            printf("%u\n", POS1CNT);
