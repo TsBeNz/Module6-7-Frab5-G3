@@ -15,7 +15,7 @@ volatile char Em_Stop = 0, set_home_x_f = 0, set_home_y_f = 0;
 volatile long int pre_x_error = 0, pre_y_error = 0, i_term_x = 0, i_term_y = 0, x_pos = 500, y_pos = 500;
 volatile float x_speed = 0.0, y_speed = 0.0, pre_speed_error_x = 0, pre_speed_error_y = 0, speed_i_term_x = 0, speed_i_term_y = 0;
 volatile long int pre_pos = 0;
-volatile char x_set_ok = 0,y_set_ok = 0 , print_f = 0;
+volatile char x_set_ok = 0, y_set_ok = 0, print_f = 0;
 
 #define PI 3.14159265
 
@@ -192,7 +192,7 @@ void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void) {
 
 void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void) {
     print_f = 1;
-//    printf("%u %u\n", POS1CNT, POS2CNT);
+    //    printf("%u %u\n", POS1CNT, POS2CNT);
     _T5IF = 0; //clear interrupt flag
 }
 
@@ -388,13 +388,14 @@ int demo_move2(int stage) {
 int main(void) {
     start_program();
     set_home();
+    printf("ok\n");
 
     //    int stage = 0;
     int numByte;
     uint8_t dataArray[10];
-    char status = 0;
+    char data_status = 0, data_type = 0;
     char return_status = 0;
-    unsigned int x_buffer=0,y_buffer =0;
+    unsigned int x_buffer = 0, y_buffer = 0, z_buffer = 0, thata_buffer = 0;
 
     while (1) {
         if (Em_Stop) {
@@ -403,56 +404,71 @@ int main(void) {
         }
         //        int output = demo_move2(stage);
         //        stage = output;
-//        demo_move1();
+        //        demo_move1();
 
+        
         numByte = UART1_ReadBuffer(dataArray, 10);
         if (numByte != 0) {
             int i;
             for (i = 0; i < numByte; i++) {
-                if (dataArray[i] == 0xFF && status == 0){
-                    status = 1;
-                }
-                else if (dataArray[i] == 0xFF && status == 1){
-                    status = 2;
-                }
-                else if (status == 2){
-                    x_buffer |= dataArray[i];
-                    status = 3;
-                }
-                else if (status == 3){
-                    x_buffer |= dataArray[i]<<8;
-                    x_pos = (unsigned int)(x_buffer*102.4);
-                    x_buffer =0;
-                    status = 4;
-                }
-                else if (status == 4){
-                    y_buffer |= dataArray[i];
-                    status = 5;
-                }
-                else if (status == 5){
-                    y_buffer |= dataArray[i]<<8;
-                    y_pos = (unsigned int)(y_buffer*102.4);
-                    y_buffer =0;
-                    status = 0;
+                if (dataArray[i] == 0xFF && data_status == 0) {
+                    data_status = 1;
+                } else if (data_status == 1) {
+                    if (dataArray[i] == 0xFF) {
+                        data_status = 2;
+                        data_type = 1;
+                    }
+                } else if (data_status == 2) {
+                    x_buffer |= (dataArray[i] << 1);
+                    data_status = 3;
+                } else if (data_status == 3) {
+                    int buffer = dataArray[i];
+                    x_buffer |= (dataArray[i] >> 7);
+                    y_buffer |= (0x01FC & (buffer << 2));
+                    data_status = 4;
+                } else if (data_status == 4) {
+                    int buffer = dataArray[i];
+                    y_buffer |= (dataArray[i] >> 6);
+                    z_buffer |= (0x01F8 & (buffer << 3));
+                    data_status = 5;
+                } else if (data_status == 5) {
+                    int buffer = dataArray[i];
+                    z_buffer |= (dataArray[i] >> 5);
+                    thata_buffer |= (0x01F0 & (buffer << 4));
+                    data_status = 6;
+                } else if (data_status == 6) {
+                    int buffer = dataArray[i];
+                    thata_buffer |= (dataArray[i] >> 4);
+                    int chack_sum = (0x0F & buffer);
+//                    if (chack_sum == ((y_buffer + y_buffer + z_buffer+ thata_buffer)%15)){
+//                        y_pos = (unsigned int) (y_buffer * 102.4);
+//                        x_pos = (unsigned int) (x_buffer * 102.4);
+                        printf("%u %u %u %u\n",x_buffer,y_buffer,z_buffer,thata_buffer);
+                        printf("ok\n");
+//                    }    
+                    x_buffer = 0;
+                    y_buffer = 0;
+                    z_buffer = 0;
+                    thata_buffer = 0;
+                    data_status = 0;
                 }
             }
         }
-    //    if (print_f == 1 && return_status == 0){
-    //        print_f = 0;
-    //        printf("%u %u\n", POS1CNT, POS2CNT);
-    //    }
-            
-        
-        if (x_set_ok == 1 && y_set_ok == 1){
-            if(return_status == 1){
+        //    if (print_f == 1 && return_status == 0){
+        //        print_f = 0;
+        //        printf("%u %u\n", POS1CNT, POS2CNT);
+        //    }
+
+
+        if (x_set_ok == 1 && y_set_ok == 1) {
+            if (return_status == 1) {
                 printf("ok\n");
                 return_status = 0;
             }
-        }
-        else{
+        } else {
             return_status = 1;
         }
-        
+
 
         //        if (lastValue != POS1CNT) {
         //            printf("%u\n", POS1CNT);
