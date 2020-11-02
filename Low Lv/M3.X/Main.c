@@ -16,10 +16,20 @@ volatile long int x_pos = 500, y_pos = 500;
 volatile float x_speed = 0.0, y_speed = 0.0, pre_speed_error_x = 0, pre_speed_error_y = 0, speed_i_term_x = 0, speed_i_term_y = 0;
 volatile long int pre_pos = 0;
 volatile char x_set_ok = 0, y_set_ok = 0, print_f = 0;
-float x2_out = 0;
-float v_set = 0;
-float w_out = 0;
-float x_out = 0;
+
+
+
+volatile float velocity_set_point[2] = {0, 0}; // max 90 mm/s
+volatile float position_set_point[2] = {0, 0}; // max 430 mm
+volatile char position_enable[2] = {1, 1};
+volatile float co_trajectory[4][3] = {
+    {0, 0, 0},
+    {0, 0, 0},
+    {18.75, 4.6875, 0},
+    {-1.5625, -0.3906, 0}
+}; //[position in matix][axis]
+volatile float a = 0, b = 0, c = 0, d = 0, e = 0;
+volatile char finish_move = 0;
 
 #define PI 3.14159265
 
@@ -32,6 +42,10 @@ float x_out = 0;
 #define t5_prescaler 0b01
 #define t5_period 60000
 #define T_speed 0.01
+
+volatile float T_speed_pow2 = T_speed*T_speed;
+volatile float T_speed_pow3 = T_speed_pow2*T_speed;
+volatile float T_speed_pow4 = T_speed_pow3*T_speed;
 
 void motor_driveX(int speed) {
     if ((int) speed == 1) {
@@ -182,110 +196,165 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
 }
 
 void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void) {
-//        motor_driveX(100);
-    static float t = 0;
-    #define a3 0.0750
-    #define a4 0.0025
-    
-    float point_tra = (a3*t*t)+(a4*t*t*t);
-    float v_tra = (a3*2)+(3*a4)+(t*t);
-    
-    static float sigma_a = 10; // adjustable
-    static float sigma_w = 1; // adjustable
-    static float Q, R;
-    static float x1_in = 0;
-    static float x2_in = 0;
-    static float x1 = 0; // orientation
-    static float x2 = 0; // w_outKalman (angular_vel)
-    static float p11 = 1.0; // adjustable
-    static float p12 = 0;
-    static float p21 = 0;
-    static float p22 = 1.0; // adjustable
-    static long int pre_vx_error = 0;
-    
-    long int position = (long int) POS1CNT;
-    long int s = position - pre_pos;
-    static float un_position = 0.0;
-    if (s >= 32768) {
-        s -= 65535;
-    } else if (s <= -32768) {
-        s += 65535;
-    }
-    un_position += ((float) s / 17.06667);
-    float v = (float) s / T_speed;
-    v = v * (0.05859375);
-    Q = sigma_a*sigma_a;
-    R = sigma_w*sigma_w;
-    float x1_new = x1_in + x2_in*T_speed;
-    float x2_new = 0 + x2_in;
-    float ye = v - x2_new;
-    p11 = p11 + T_speed * p21 + (Q * T_speed * T_speed * T_speed * T_speed) / 4 + (T_speed * T_speed * (p12 + T_speed * p22)) / T_speed;
-    p12 = p12 + T_speed * p22 + (Q * T_speed * T_speed * T_speed) / 2;
-    p21 = (2 * T_speed * p21 + Q * T_speed * T_speed + 2 * p22 * T_speed * T_speed) / (2 * T_speed);
-    p22 = Q * T_speed * T_speed + p22;
-    x1_new = x1_new + (p12 * ye) / (R + p22);
-    x2_new = x2_new + (p22 * ye) / (R + p22);
-    p11 = p11 - (p12 * p21) / (R + p22);
-    p12 = p12 - (p12 * p22) / (R + p22);
-    p21 = -p21 * (p22 / (R + p22) - 1);
-    p22 = -p22 * (p22 / (R + p22) - 1);
-    x1 = x1_new;
-    x2 = x2_new;
-    x1_in = x1;
-    x2_in = x2;
-    
-    static long int pre_x_error = 0, i_term_x = 0;
-    long int error_x = (long int) (x_pos - (long int) POS1CNT);
-    i_term_x = error_x + i_term_x;
-    long int d_term_x = error_x - pre_x_error;
-    float v_PID = (0.015 * (float)error_x + 0 * i_term_x + 0.001 * d_term_x);
-    static float i_term_vx =0;
-    static float v_setpoint = 0;
-    v_setpoint = v_PID;
-    if(v_setpoint == 0.0){
-        i_term_vx = 0;
-    }
-    
-//    static float vx_pwm =0;
-    float error_vx = v_setpoint - x2;
-    float d_term_vx = error_vx - pre_vx_error;
-    i_term_vx = error_vx + i_term_vx;
-    float vx_pwm = (35 * error_vx + 1 * i_term_vx +  8 * d_term_vx); 
-//    vx_pwm += vx_pwm_real;
-    printf("%.2f \n",v_PID);
-    if ((long int)vx_pwm >= PWM_period) {
-        vx_pwm = PWM_period;
-    } else if ((long int)vx_pwm <= -PWM_period) {
-        vx_pwm = PWM_period;
+    //    motor_driveX(100);
+
+    static float sigma_a[2] = {8.5, 10}; // adjustable
+    static float sigma_w[2] = {1, 1}; // adjustable    
+    static float x1[2] = {0, 0}; // orientation
+    static float x2[2] = {0, 0}; // w_outKalman (angular_vel)
+    static float p11[2] = {1.0, 1.0}; // adjustable
+    static float p12[2] = {0, 0};
+    static float p21[2] = {0, 0};
+    static float p22[2] = {1.0, 1.0}; // adjustable
+    static long int pre_position[2] = {0, 0};
+    static float unwrapped_position[2] = {0.0, 0.0};
+    float v[2] = {0, 0};
+
+    static float pre_position_error[2] = {0, 0}, position_i_term[2] = {0, 0}, cmd_velocity[2] = {0, 0};
+    static float position_kp[2] = {0.9, 0.9}, position_ki[2] = {0, 0}, position_kd[2] = {0, 0};
+
+    static float pre_velocity_error[2] = {0, 0}, velocity_i_term[2] = {0, 0}, pwm_output[2] = {0, 0};
+    static int velocity_kp[2] = {600, 600}, velocity_ki[2] = {30, 30}, velocity_kd[2] = {330, 330};
+
+    static float trajectory_time = 0;
+
+    long int position[2] = {(long int) POS1CNT, (long int) POS2CNT}; //read data form encoder
+
+    int i = 0;
+    static float qd[2] = {0, 0};
+    static float vd[2] = {0, 0};
+    float trajectory_time_pow2 = trajectory_time * trajectory_time;
+    float trajectory_time_pow3 = trajectory_time_pow2 * trajectory_time;
+    for (i = 0; i < 2; i++) {
+        if (!finish_move) {
+            // Trajectory motion
+            qd[i] = co_trajectory[0][i] + co_trajectory[1][i] * trajectory_time + co_trajectory[2][i] * trajectory_time_pow2 + co_trajectory[3][i] * trajectory_time_pow3;
+            vd[i] = co_trajectory[1][i] + 2 * co_trajectory[2][i] * trajectory_time + 3 * co_trajectory[3][i] * trajectory_time_pow2;
+        }
+
+        long int ds = position[i] - pre_position[i]; //find delta s
+        if (ds >= 32768) { //unwrapping position
+            ds -= 65535;
+        } else if (ds <= -32768) {
+            ds += 65535;
+        }
+        float ds_mm = (float) ds / 102.4; // change pulse to mm
+        v[i] = ds_mm / T_speed; // velocity [mm/s]
+        unwrapped_position[i] += ds_mm; // update new position
+
+        // kaman filter
+
+        float Q = sigma_a[i] * sigma_a[i];
+        float R = sigma_w[i] * sigma_w[i];
+        float x1_new = x1[i] + x2[i] * T_speed;
+        float x2_new = 0 + x2[i];
+        float ye = v[i] - x2_new;
+        p11[i] = p11[i] + T_speed * p21[i] + (Q * T_speed_pow4) / 4 + (T_speed_pow2 * (p12[i] + T_speed * p22[i])) / T_speed;
+        p12[i] = p12[i] + T_speed * p22[i] + (Q * T_speed_pow3) / 2;
+        p21[i] = (2 * T_speed * p21[i] + Q * T_speed_pow2 + 2 * p22[i] * T_speed_pow2) / (2 * T_speed);
+        p22[i] = Q * T_speed_pow2 + p22[i];
+        x1_new = x1_new + (p12[i] * ye) / (R + p22[i]);
+        x2_new = x2_new + (p22[i] * ye) / (R + p22[i]);
+        p11[i] = p11[i] - (p12[i] * p21[i]) / (R + p22[i]);
+        p12[i] = p12[i] - (p12[i] * p22[i]) / (R + p22[i]);
+        p21[i] = -p21[i] * (p22[i] / (R + p22[i]) - 1);
+        p22[i] = -p22[i] * (p22[i] / (R + p22[i]) - 1);
+        //update variable of kaman filter
+        pre_position[i] = position[i];
+        x1[i] = x1_new; // position
+        x2[i] = x2_new; // velocity 
+
+
+        // position control //
+        //        float position_error = position_set_point[i] - unwrapped_position[i];
+        //        position_i_term[i] += position_error;
+        //        float position_d_term = position_error - pre_position_error[i];
+        //        cmd_velocity[i] = (position_kp[i] * position_error)+(position_ki[i] * position_i_term[i])+(position_kd[i] * position_d_term);
+        
+        float position_error = qd[i] - unwrapped_position[i];
+        cmd_velocity[i] = (position_kp[i] * position_error);
+        //update variable of position control
+        pre_position_error[i] = position_error;
+
+        //        float velocity_input = velocity_set_point[i] + position_enable[i] * cmd_velocity[i];
+        float velocity_input = vd[i] + position_enable[i] * cmd_velocity[i];
+        if (velocity_input >= 90.0) {
+            velocity_input = 90.0;
+        }
+
+        // velocity control //
+        float velocity_error = velocity_input - x2[i];
+        velocity_i_term[i] += velocity_error;
+        float velocity_d_term = velocity_error - pre_velocity_error[i];
+        pwm_output[i] = (velocity_kp[i] * velocity_error)+(velocity_ki[i] * velocity_i_term[i])+(velocity_kd[i] * velocity_d_term);
+        //update variable of velocity control
+        pre_velocity_error[i] = velocity_error;
     }
 
 
-//    if (abs(vx_pwm) <= 10) {
-//        i_term_vx = 0;
-//    }
-    
-    if (vx_pwm >= 0) {
-        OC1RS = (unsigned int) abs(vx_pwm);
+
+    // drive command
+    if (pwm_output[0] >= PWM_period) {
+        pwm_output[0] = PWM_period;
+    } else if (pwm_output[0] <= -PWM_period) {
+        pwm_output[0] = PWM_period;
+    }
+
+    if (pwm_output[0] >= 0) {
+        OC1RS = (unsigned int) pwm_output[0];
         _LATA0 = 1;
         _LATA1 = 0;
     } else {
-        OC1RS = (unsigned int) abs(vx_pwm);
+        OC1RS = (unsigned int) abs(pwm_output[0]);
         _LATA0 = 0;
         _LATA1 = 1;
     }
-    pre_pos = position;
-    pre_vx_error = error_vx;
-    x2_out = x1;
-    w_out = x2;
-    v_set = v;
-    x_out = un_position;
-    _T4IF = 0; //clear interrupt flag
 
+    if (pwm_output[1] >= PWM_period) {
+        pwm_output[1] = PWM_period;
+    } else if (pwm_output[1] <= -PWM_period) {
+        pwm_output[1] = PWM_period;
+    }
+
+    if (pwm_output[1] >= 0) {
+        OC2RS = (unsigned int) pwm_output[1];
+        _LATA4 = 1;
+        _LATB4 = 0;
+    } else {
+        OC2RS = (unsigned int) abs(pwm_output[1]);
+        _LATA4 = 0;
+        _LATB4 = 1;
+    }
+
+
+    //update time 
+    if (trajectory_time >= 8.0) {
+        trajectory_time = 0;
+        finish_move = 1;
+        _LATA4 = 1;
+        _LATB4 = 1;
+        _LATA0 = 1;
+        _LATA1 = 1;
+        printf("stop \n");
+        //        T5CONbits.TON = 0;
+        //        T4CONbits.TON = 0;
+    }
+    if (!finish_move) {
+        trajectory_time += T_speed;
+    }
+    //debug
+    a = x1[1];
+    b = unwrapped_position[1];
+    c = x2[1];
+    d = v[1];
+    e = qd[1];
+    _T4IF = 0;
 }
 
 void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void) {
     print_f = 1;
-//    printf("%.2f %.2f %.2f %.2f \n", v_set, w_out, x_out, x2_out);
+    printf("%.2f %.2f %.2f %.2f %.2f \n", b, a, d, c, e);
+    //    printf("%.2f\n", e);
     //    printf("%u %u\n", POS1CNT, POS2CNT);
     _T5IF = 0; //clear interrupt flag
 }
@@ -338,8 +407,9 @@ void set_home() {
     POS2CNT = 0;
     printf("Y set\n");
     printf("set home finish\n");
-//    T1CONbits.TON = 1;
+    //    T1CONbits.TON = 1;
     T4CONbits.TON = 1;
+    T5CONbits.TON = 1;
 }
 
 void initPLL() {
@@ -444,8 +514,8 @@ void start_program(void) {
     __builtin_enable_interrupts();
     T2CONbits.TON = 1; //enable timer2
     T3CONbits.TON = 1; //enable timer3
-//    T4CONbits.TON = 1; //enable timer4
-    T5CONbits.TON = 1; //enable timer5
+    //    T4CONbits.TON = 1; //enable timer4
+    //    T5CONbits.TON = 1; //enable timer5
 
     _LATA0 = 0;
     _LATA1 = 0;
@@ -482,7 +552,7 @@ int demo_move2(int stage) {
 
 int main(void) {
     start_program();
-        set_home();
+    set_home();
     printf("ok\n");
 
     //    
@@ -501,7 +571,7 @@ int main(void) {
         //        int output = demo_move2(stage);
         //        stage = output;
 
-                demo_move1();
+        demo_move1();
 
 
         numByte = UART1_ReadBuffer(dataArray, 10);
