@@ -33,7 +33,7 @@ while True:
                                                                 parameters=parameters,
                                                                 cameraMatrix=mtx,
                                                                 distCoeff=dist)
-   
+
     if np.all(ids is not None):  # If there are markers found by detector
         # print(ids.tolist())
         for i in range(0, len(ids)):  # Iterate in markers

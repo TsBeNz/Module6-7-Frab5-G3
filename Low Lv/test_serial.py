@@ -1,5 +1,8 @@
 import serial
 import time
+import psutil
+import matplotlib.pyplot as plt
+import communication
 
 def read():
     ser = serial.Serial(port="com9", baudrate=115200)
@@ -47,7 +50,6 @@ def readtest():
     b=0
     c=0
     d=0
-    status = 0
     while(True):
         line = ser.readline()
         data = line.decode()[:len(line)-1]
@@ -93,10 +95,35 @@ def readtest():
 def data_frame(x=0, y=0, z=0, thata=0, type=0):
     return bytes([255, 255, x>>1, (((x&0x0001)<<7)|(y>>2)), (((y&0x0003)<<6)|(z>>3)), (((z&0x0007)<<5)|(thata>>4)),(((thata&0x000F)<<4)|(0x00>>4))])
 
+def realtimeplot():
+    # ser = serial.Serial(port="com9", baudrate=115200)
+    # ser.rts = 0
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ay = fig.add_subplot(111)
+    fig.show()
+    i = 0
+    x, y ,y1= [], [],[]
+    block = 50
+    while True:
+        buffer = psutil.cpu_percent()
+        x.append(i)
+        y.append(buffer)
+        y1.append(buffer-10)
+        ax.plot(x, y, color='b')
+        ay.plot(x, y1, color='g')
+        fig.canvas.draw()
+        ax.set_xlim(left=max(0, i-block), right=i+block)
+        ay.set_xlim(left=max(0, i-block), right=i+block)
+        plt.pause(0.0001)
+        # time.sleep(0.01)
+        i += 1
+
 
 if __name__ == '__main__':
     try:
-        readtest()
-        # read()
+        # readtest()
+        read()
+        # realtimeplot()
     except KeyboardInterrupt:
         print("\n\n\n\nShutdown ...\n\n\n\n")

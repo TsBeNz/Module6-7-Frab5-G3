@@ -12,27 +12,26 @@
 #include <math.h>
 
 volatile char Em_Stop = 0, set_home_x_f = 0, set_home_y_f = 0;
-volatile long int pre_x_error = 0, pre_y_error = 0, i_term_x = 0, i_term_y = 0, x_pos = 500, y_pos = 500;
+volatile long int x_pos = 500, y_pos = 500;
 volatile float x_speed = 0.0, y_speed = 0.0, pre_speed_error_x = 0, pre_speed_error_y = 0, speed_i_term_x = 0, speed_i_term_y = 0;
 volatile long int pre_pos = 0;
 volatile char x_set_ok = 0, y_set_ok = 0, print_f = 0;
+float x2_out = 0;
+float v_set = 0;
+float w_out = 0;
+float x_out = 0;
 
 #define PI 3.14159265
 
 #define PWM_period 16667
 #define SERVO_period 10000
 #define t1_prescaler 0b01
-#define t1_period 2500
-#define t4_prescaler 0b01
+#define t1_period 25000
+#define t4_prescaler 0b01  
 #define t4_period 50000
 #define t5_prescaler 0b01
 #define t5_period 60000
 #define T_speed 0.01
-
-#define k_p_x 9
-#define k_d_x 2
-#define k_p_y 14
-#define k_d_y 5
 
 void motor_driveX(int speed) {
     if ((int) speed == 1) {
@@ -123,12 +122,15 @@ void __attribute__((interrupt, no_auto_psv)) _INT2Interrupt(void) {
 }
 
 void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
+    static long int pre_x_error = 0, pre_y_error = 0, i_term_x = 0, i_term_y = 0;
     long int error_x = (long int) (x_pos - (long int) POS1CNT);
     long int error_y = (long int) (y_pos - (long int) POS2CNT);
+    i_term_x = error_x + i_term_x;
+    i_term_y = error_y + i_term_y;
     long int d_term_x = error_x - pre_x_error;
     long int d_term_y = error_y - pre_y_error;
-    long int x_pwm = (long int) (k_p_x * error_x + k_d_x * d_term_x);
-    long int y_pwm = (long int) (k_p_y * error_y + k_d_y * d_term_y);
+    long int x_pwm = (25 * error_x + 0 * i_term_x + 15 * d_term_x);
+    long int y_pwm = (22 * error_y + 0 * i_term_y + 12 * d_term_y);
 
     if (x_pwm >= PWM_period) {
         x_pwm = PWM_period;
@@ -145,7 +147,7 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
     OC1RS = (unsigned int) abs(x_pwm);
     OC2RS = (unsigned int) abs(y_pwm);
 
-    if (abs(error_x) <= 50) {
+    if (abs(error_x) <= 20) {
         _LATA0 = 1;
         _LATA1 = 1;
         x_set_ok = 1;
@@ -159,7 +161,7 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
         x_set_ok = 0;
     }
 
-    if (abs(error_y) <= 50) {
+    if (abs(error_y) <= 20) {
         _LATA4 = 1;
         _LATB4 = 1;
         y_set_ok = 1;
@@ -174,24 +176,116 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void) {
     }
     pre_x_error = error_x;
     pre_y_error = error_y;
-    //    printf("%lu %lu %ld %ld\n", (long int) x_pos, (long int) POS1CNT, x_pwm, error_x);
+    //        printf("%lu %lu %ld %ld\n", (long int) x_pos, (long int) POS1CNT, x_pwm, error_x);
     //        printf("%lu %lu %ld %ld\n",(long int)y_pos,(long int)POS2CNT,y_pwm,error_y);
     _T1IF = 0; //clear interrupt flag
 }
 
 void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void) {
-    //    long int s = (long int) POS1CNT - pre_pos;
-    //    if (s >= 32768) {
-    //        s -= 65535;
-    //    } else if (s <= -32768) {
-    //        s += 65535;
-    //    }
-    //    float v = (float)s / T_speed;
+//        motor_driveX(100);
+    static float t = 0;
+    #define a3 0.0750
+    #define a4 0.0025
+    
+    float point_tra = (a3*t*t)+(a4*t*t*t);
+    float v_tra = (a3*2)+(3*a4)+(t*t);
+    
+    static float sigma_a = 10; // adjustable
+    static float sigma_w = 1; // adjustable
+    static float Q, R;
+    static float x1_in = 0;
+    static float x2_in = 0;
+    static float x1 = 0; // orientation
+    static float x2 = 0; // w_outKalman (angular_vel)
+    static float p11 = 1.0; // adjustable
+    static float p12 = 0;
+    static float p21 = 0;
+    static float p22 = 1.0; // adjustable
+    static long int pre_vx_error = 0;
+    
+    long int position = (long int) POS1CNT;
+    long int s = position - pre_pos;
+    static float un_position = 0.0;
+    if (s >= 32768) {
+        s -= 65535;
+    } else if (s <= -32768) {
+        s += 65535;
+    }
+    un_position += ((float) s / 17.06667);
+    float v = (float) s / T_speed;
+    v = v * (0.05859375);
+    Q = sigma_a*sigma_a;
+    R = sigma_w*sigma_w;
+    float x1_new = x1_in + x2_in*T_speed;
+    float x2_new = 0 + x2_in;
+    float ye = v - x2_new;
+    p11 = p11 + T_speed * p21 + (Q * T_speed * T_speed * T_speed * T_speed) / 4 + (T_speed * T_speed * (p12 + T_speed * p22)) / T_speed;
+    p12 = p12 + T_speed * p22 + (Q * T_speed * T_speed * T_speed) / 2;
+    p21 = (2 * T_speed * p21 + Q * T_speed * T_speed + 2 * p22 * T_speed * T_speed) / (2 * T_speed);
+    p22 = Q * T_speed * T_speed + p22;
+    x1_new = x1_new + (p12 * ye) / (R + p22);
+    x2_new = x2_new + (p22 * ye) / (R + p22);
+    p11 = p11 - (p12 * p21) / (R + p22);
+    p12 = p12 - (p12 * p22) / (R + p22);
+    p21 = -p21 * (p22 / (R + p22) - 1);
+    p22 = -p22 * (p22 / (R + p22) - 1);
+    x1 = x1_new;
+    x2 = x2_new;
+    x1_in = x1;
+    x2_in = x2;
+    
+    static long int pre_x_error = 0, i_term_x = 0;
+    long int error_x = (long int) (x_pos - (long int) POS1CNT);
+    i_term_x = error_x + i_term_x;
+    long int d_term_x = error_x - pre_x_error;
+    float v_PID = (0.015 * (float)error_x + 0 * i_term_x + 0.001 * d_term_x);
+    static float i_term_vx =0;
+    static float v_setpoint = 0;
+    v_setpoint = v_PID;
+    if(v_setpoint == 0.0){
+        i_term_vx = 0;
+    }
+    
+//    static float vx_pwm =0;
+    float error_vx = v_setpoint - x2;
+    float d_term_vx = error_vx - pre_vx_error;
+    i_term_vx = error_vx + i_term_vx;
+    float vx_pwm = (35 * error_vx + 1 * i_term_vx +  8 * d_term_vx); 
+//    vx_pwm += vx_pwm_real;
+    printf("%.2f \n",v_PID);
+    if ((long int)vx_pwm >= PWM_period) {
+        vx_pwm = PWM_period;
+    } else if ((long int)vx_pwm <= -PWM_period) {
+        vx_pwm = PWM_period;
+    }
+
+
+//    if (abs(vx_pwm) <= 10) {
+//        i_term_vx = 0;
+//    }
+    
+    if (vx_pwm >= 0) {
+        OC1RS = (unsigned int) abs(vx_pwm);
+        _LATA0 = 1;
+        _LATA1 = 0;
+    } else {
+        OC1RS = (unsigned int) abs(vx_pwm);
+        _LATA0 = 0;
+        _LATA1 = 1;
+    }
+    pre_pos = position;
+    pre_vx_error = error_vx;
+    x2_out = x1;
+    w_out = x2;
+    v_set = v;
+    x_out = un_position;
     _T4IF = 0; //clear interrupt flag
+
 }
 
 void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void) {
     print_f = 1;
+//    printf("%.2f %.2f %.2f %.2f \n", v_set, w_out, x_out, x2_out);
     //    printf("%u %u\n", POS1CNT, POS2CNT);
     _T5IF = 0; //clear interrupt flag
 }
@@ -206,7 +300,7 @@ void set_home() {
         motor_driveX(30);
     }
     delay(500);
-    motor_driveX(-15);
+    motor_driveX(-18);
     while (set_home_x_f) {
         if (!set_home_x_f && x_set) {
             motor_driveX(0);
@@ -244,7 +338,8 @@ void set_home() {
     POS2CNT = 0;
     printf("Y set\n");
     printf("set home finish\n");
-    T1CONbits.TON = 1;
+//    T1CONbits.TON = 1;
+    T4CONbits.TON = 1;
 }
 
 void initPLL() {
@@ -329,15 +424,15 @@ void start_program(void) {
     IEC0 |= 0x0001; //enable interrupts0
     IEC1 |= 0x2010; //enable interrupts1,2
     INTCON2 &= 0xFFFF; //Edge detection
-    _INT0IP = 1; //priority
+    _INT0IP = 7; //priority
     _INT1IP = 7; //priority
     _INT2IP = 7; //priority
 
     _T1IE = 1; //enable interrupt for timer1
     _T4IE = 1; //enable interrupt for timer4
     _T5IE = 1; //enable interrupt for timer5
-    _T1IP = 3; //priority interrupt for timer1
-    _T4IP = 1; //priority interrupt for timer4
+    _T1IP = 5; //priority interrupt for timer1
+    _T4IP = 5; //priority interrupt for timer4
     _T5IP = 1; //priority interrupt for timer5
 
     AD1PCFGL = 0xFFFF; //set analog input to digital pin
@@ -349,7 +444,7 @@ void start_program(void) {
     __builtin_enable_interrupts();
     T2CONbits.TON = 1; //enable timer2
     T3CONbits.TON = 1; //enable timer3
-    T4CONbits.TON = 1; //enable timer4
+//    T4CONbits.TON = 1; //enable timer4
     T5CONbits.TON = 1; //enable timer5
 
     _LATA0 = 0;
@@ -387,10 +482,10 @@ int demo_move2(int stage) {
 
 int main(void) {
     start_program();
-    set_home();
+        set_home();
     printf("ok\n");
 
-    //    int stage = 0;
+    //    
     int numByte;
     uint8_t dataArray[10];
     char data_status = 0, data_type = 0;
@@ -402,11 +497,13 @@ int main(void) {
             Em_Stop = 0;
             printf("Em \n");
         }
+        //        static int stage = 0;
         //        int output = demo_move2(stage);
         //        stage = output;
-        //        demo_move1();
 
-        
+                demo_move1();
+
+
         numByte = UART1_ReadBuffer(dataArray, 10);
         if (numByte != 0) {
             int i;
@@ -437,15 +534,14 @@ int main(void) {
                     thata_buffer |= (0x01F0 & (buffer << 4));
                     data_status = 6;
                 } else if (data_status == 6) {
-                    int buffer = dataArray[i];
+                    //                    int buffer = dataArray[i];
                     thata_buffer |= (dataArray[i] >> 4);
-                    int chack_sum = (0x0F & buffer);
-//                    if (chack_sum == ((y_buffer + y_buffer + z_buffer+ thata_buffer)%15)){
-//                        y_pos = (unsigned int) (y_buffer * 102.4);
-//                        x_pos = (unsigned int) (x_buffer * 102.4);
-                        printf("%u %u %u %u\n",x_buffer,y_buffer,z_buffer,thata_buffer);
-                        printf("ok\n");
-//                    }    
+                    //                    int chack_sum = (0x0F & buffer);
+                    //                    if (chack_sum == ((y_buffer + y_buffer + z_buffer+ thata_buffer)%15)){
+                    y_pos = (unsigned int) (y_buffer * 102.4);
+                    x_pos = (unsigned int) (x_buffer * 102.4);
+                    //                    printf("%u %u %u %u\n", x_buffer, y_buffer, z_buffer, thata_buffer);
+                    //                    }    
                     x_buffer = 0;
                     y_buffer = 0;
                     z_buffer = 0;
