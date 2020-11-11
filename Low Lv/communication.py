@@ -105,51 +105,83 @@ class communication:
         """
         self.ser.write(
             bytes([253, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, 0]))
+        while (True):
+            data = self.Readline()
+            if(data == "can't move"):
+                self.ser.write(
+                    bytes([253, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, 0]))
+                time.sleep(0.05)
+            else:
+                data_list = data.split()
+                if(int(data_list[0]) == x and int(data_list[1]) == y and int(data_list[2]) == z):
+                    self.ser.write(
+                        bytes([153, 0, 0, 0, 0, 0, 0, 0]))
+                    break
+                else:
+                    self.ser.write(
+                    bytes([253, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, 0]))
+            
 
     def Path_list(self, Path=[]):
         """
         Path Move By Position Control
         ========================
-        use Move2porint() function for move robot\n
+        use Move2point() function for move robot\n
         """
+        print("\n\n\n\n\n\n\n\nPath_list move is start\n")
         if(PIC.Connect()):
+            self.Go2home()
             i = 0
             while(True):
-                # self.Move2point(50,50,0,0)
-                data = self.Readline()
-                if(data == "ok"):
-                    print("Move success!!")
-                    if(i == len(Path)):
-                        print("finish move!!")
-                        break
-                    print("Move to " + str(Path[i]))
-                    self.Move2point(Path[i][0], Path[i][1], 0, 0)
-                    i += 1
+                if(i == len(Path)):
+                    print("finish move!!")
+                    break
+                print("Move to " + str(Path[i]))
+                self.Move2point(Path[i][0], Path[i][1], Path[i][2], 0)
+                print("Move success!!")
+                i += 1
 
+
+def photo_test(x,y):
+    PIC = communication()
+    PIC.Go2home()
+    x_buf = 0 
+    y_buf = 0 
+    for i in range(x):
+        x_buf = (i*400//x) + (200//x)
+        for j in range(y):
+            y_buf = (j*400//y) + (200//y)
+            PIC.Move2point(x_buf, y_buf, 400, 0)
+            print(str(x_buf) + " " + str(y_buf))
+            time.sleep(5)
 
 if __name__ == '__main__':
     try:
-        i = 0
-        inputtest = []
+        # photo_test(3,3)
         PIC = communication()
-        PIC.Go2home()
-        print("eiei")
-        while(True):
-            x_in = int(input("x : \n"))
-            y_in = int(input("y : \n"))
-            z_in = int(input("z : \n"))
-            thata_in = int(input("thata : \n"))
-            while(x_in > 450 or y_in > 450 or z_in > 420 or thata_in > 420):
-                print("data out of range")
-                x_in = int(input("x : \n"))
-                y_in = int(input("y : \n"))
-                z_in = int(input("z : \n"))
-                thata_in = int(input("thata : \n"))
-            PIC.Move2point(x_in, y_in, z_in, thata_in)
-            # while(True):
+        inputtest = [[0,0,260,0],[64,41,260,0],[75,174,250,0],[259,286,150,0],[400,400,150,0],[400,400,380,0],[400,400,200,0],[400,400,380,0]]
+        # inputtest = [[100,10,400,0],[100,110,400,0],[100,210,400,0],[100,310,400,0],[100,410,400,0],[200,410,400,0],[200,310,400,0],[200,210,400,0],[200,110,400,0],[200,10,400,0],[300,10,400,0],[300,110,400,0],[300,210,400,0],[300,310,400,0],[300,410,400,0],[400,410,400,0],[400,310,400,0],[400,210,400,0],[400,110,400,0],[400,10,400,0]]
+        PIC.Path_list(inputtest)
+
+        # PIC.Go2home()
+        # print("eiei")
+        # while(True):
+        #     x_in = int(input("x : \n"))
+        #     y_in = int(input("y : \n"))
+        #     z_in = int(input("z : \n"))
+        #     thata_in = int(input("thata : \n"))
+        #     while(x_in > 450 or y_in > 450 or z_in > 400 or thata_in > 420):
+        #         print("data out of range")
+        #         x_in = int(input("x : \n"))
+        #         y_in = int(input("y : \n"))
+        #         z_in = int(input("z : \n"))
+        #         thata_in = int(input("thata : \n"))
+
+        #     PIC.Move2point(x_in, y_in, z_in, 0)
+        #     # while(True):
             #     print(PIC.status_point())
             #     time.sleep(0.5)
-        
+
         # while(True):
         #     print(PIC.Readline())
         # while(True):
@@ -160,10 +192,9 @@ if __name__ == '__main__':
         #     if(i >= 360):
         #         break
         # PIC.Path_list(inputtest)
-        # inputtest = [[50,400,0,0],[400,400,0,0],[400,50,0,0],[50,50,0,0]]
-        # PIC.Path_list(inputtest)
+        # inputtest = [[50,50,0,0],[50,400,20,0],[400,400,300,0],[400,50,20,0],[50,50,300,0],[200,200,0,0]]
         # while(True):
-        #     
+        #
 
     except KeyboardInterrupt:
         print("\nKeyboardInterrupt!!!!\n\n\nShutdown ...\n\n\n\n")

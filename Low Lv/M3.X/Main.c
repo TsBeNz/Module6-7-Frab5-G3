@@ -36,7 +36,9 @@
 unsigned char BufferA[8] __attribute__((space(dma)));
 unsigned char BufferB[50] __attribute__((space(dma)));
 
-volatile char Em_Stop = 0, set_home_x_f = 0, set_home_y_f = 0;
+volatile char Em_Stop = 0, set_home_x_f = 0, set_home_y_f = 0, griper_status = 0;
+
+volatile float z_before = 410;
 
 volatile int x = 0, y = 0, z = 0, theta = 0, update_position_trajectory = 0;
 volatile char sethomef = 0, driver = 0;
@@ -44,10 +46,10 @@ volatile long int pre_position[2] = {0, 0};                                 // f
 volatile float x1[2] = {0, 0};                                              // posiition
 volatile float x2[2] = {0, 0};                                              // velocity
 volatile float pre_velocity_error[2] = {0, 0}, velocity_i_term[2] = {0, 0}; // velocity PID
-volatile float unwrapped_position[2] = {0.0, 0.0};
-volatile float velocity_set_point[2] = {0, 0}; // max +-90 mm/s
-volatile float position_set_point[2] = {0, 0}; // max 430 mm
-volatile char position_enable[2] = {1, 1}, velocity_enable[2] = {1, 1};
+volatile float unwrapped_position[3] = {0.0, 0.0, 0.0};
+volatile float velocity_set_point[3] = {0, 0, 0}; // max +-90 mm/s
+volatile float position_set_point[3] = {0, 0, 0}; // max 430 mm
+volatile char position_enable[3] = {1, 1, 1}, velocity_enable[3] = {1, 1, 1};
 volatile float co_trajectory[3][3] = {
     {0, 0, 0},
     {0, 0, 0},
@@ -125,49 +127,51 @@ void delay(int time_ms)
 
 void set_home()
 {
-    // T1CONbits.TON = 0;
-    // T4CONbits.TON = 0;
-    // T5CONbits.TON = 0;
-    //    T5CONbits.TON = 0;
     position_enable[0] = 0;
     position_enable[1] = 0;
     velocity_enable[0] = 0;
     velocity_enable[1] = 0;
+    velocity_enable[2] = 0;
     set_home_x_f = 1;
     int x_set = 1;
     int y_set = 1;
     printf("sethome\n");
     while (_RA2)
     {
-        PR3 = 8000;
-        OC3RS = 4000;
+        PR3 = 500;
+        OC3RS = 250;
         _LATB13 = 0; //down
     }
-    delay(500);
+    delay(200);
     while (!_RA2)
     {
-        PR3 = 4000;
-        OC3RS = 2000;
+        PR3 = 1000;
+        OC3RS = 500;
         _LATB13 = 1; //up
     }
-    //        int i = 0;
-    //        for (i = 0; i < 3; i++) {
-    //            PR3 = 4000;
-    //            OC3RS = 2000;
-    //            _LATB13 = 0; //down
-    //            delay(3000);
-    //            int j = 2000;
-    //            while (!_RA2) {
-    //                PR3 = j;
-    //                OC3RS = j / 2;
-    //                _LATB13 = 1; //up
-    //                delay(1);
-    //                j += 4;
-    //                if (j >= 13000) {
-    //                    j = 13000;
-    //                }
-    //            }
-    //        }
+    int i = 0;
+
+    // for (i = 0; i < 20; i++)
+    // {
+    //     PR3 = 1000;
+    //     OC3RS = 500;
+    //     _LATB13 = 0; //down
+    //     delay(2000);
+    //     int j = 500;
+    //     while (!_RA2)
+    //     {
+    //         PR3 = j;
+    //         OC3RS = j / 2;
+    //         _LATB13 = 1; //up
+    //         delay(1);
+    //         j += 2;
+    //         if (j >= 50000)
+    //         {
+    //             j = 50000;
+    //         }
+    //     }
+    // }
+
     PR3 = 0;     //stop
     OC3RS = 0;   //stop
     _LATB13 = 1; //up
@@ -223,7 +227,7 @@ void set_home()
     POS2CNT = 0;
     printf("Y set\n");
     printf("set home finish\n");
-    int i = 0;
+    i = 0;
     for (i = 0; i < 2; i++)
     {
         pre_velocity_error[i] = 0;
@@ -237,6 +241,10 @@ void set_home()
         position_enable[i] = 1;
         velocity_enable[i] = 1;
     }
+    unwrapped_position[2] = 410;
+    z_before = 410;
+    velocity_set_point[2] = 0;
+    velocity_enable[2] = 1;
 
     // T4CONbits.TON = 1;
     // T5CONbits.TON = 1;
@@ -247,36 +255,59 @@ void trajectory_gen(unsigned int x, unsigned int y, unsigned int z)
     if (trajectory_finish_move)
     {
         float t = 0;
-        float setpoint[2] = {(float)x, (float)y};
+        float setpoint[3] = {(float)x, (float)y, (float)z};
         int i = 0;
-        float ds_set[2] = {0, 0};
-        for (i = 0; i < 2; i++)
+        float ds_set[3] = {0, 0, 0};
+        float tf = 0;
+        for (i = 0; i < 3; i++)
         {
-            ds_set[i] = setpoint[i] - unwrapped_position[i];
-            float tf = abs(ds_set[i]) / 50;
+            if (i >= 1.5)
+            {
+                ds_set[i] = setpoint[i] - z_before;
+            }
+            else
+            {
+                ds_set[i] = setpoint[i] - unwrapped_position[i];
+            }
+            tf = abs(ds_set[i]) / 42;
             if (tf > t)
             {
                 t = tf;
             }
         }
-        if (t < 3)
+        if (t < 1.5)
         {
-            t = 3;
+            t = 1.5;
         }
         float t_pow3 = t * t * t;
         for (i = 0; i < 2; i++)
         {
-            velocity_set_point[i] = 0; // max 90 mm/s
-            position_set_point[i] = 0; // max 430 mm
-            position_enable[i] = 1;
             co_trajectory[0][i] = unwrapped_position[i];
             co_trajectory[1][i] = ((3 * t * (ds_set[i])) / (t_pow3));
             co_trajectory[2][i] = ((-2 * (ds_set[i])) / (t_pow3));
+            velocity_set_point[i] = 0; // max 90 mm/s
+            position_set_point[i] = 0; // max 430 mm
+            position_enable[i] = 1;
         }
+        co_trajectory[0][2] = z_before;
+        co_trajectory[1][2] = ((3 * t * (ds_set[2])) / (t_pow3));
+        co_trajectory[2][2] = ((-2 * (ds_set[2])) / (t_pow3));
+        velocity_set_point[2] = 0; // max 90 mm/s
+        position_set_point[2] = 0; // max 430 mm
+        position_enable[2] = 1;
+        // printf("%.2f %.2f %.2f\n",z_before,setpoint[2],ds_set[2]);
+        z_before = z;
         trajectory_time_set = t;
         trajectory_finish_move = 0;
+
+        // unwrapped_position[2] = (float)z;
         // T2CONbits.TON = 1;
     }
+}
+
+void Griper(char input)
+{
+    griper_status = input;
 }
 
 void __attribute__((interrupt, no_auto_psv)) _INT0Interrupt(void)
@@ -413,10 +444,36 @@ void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void)
         //update variable of velocity control
         pre_velocity_error[i] = velocity_error;
     }
+    unwrapped_position[2] = co_trajectory[0][2] + (co_trajectory[1][2] * trajectory_time_pow2) + (co_trajectory[2][2] * trajectory_time_pow3);
+    velocity_set_point[2] = (2 * co_trajectory[1][2] * trajectory_time) + (3 * co_trajectory[2][2] * trajectory_time_pow2);
 
     //end of calculation command part
 
     // drive command
+    if (velocity_enable[2])
+    {
+        if (abs(velocity_set_point[2]) >= 1.8)
+        {
+            unsigned int buffer = (unsigned int)(100000/ abs(velocity_set_point[2]));
+            PR3 = buffer;
+            OC3RS = buffer / 2;
+            // printf("%.2f %.2f\n", velocity_set_point[2], buffer);
+            if (velocity_set_point[2] > 0)
+            {
+                _LATB13 = 1; //up
+            }
+            else
+            {
+                _LATB13 = 0; //down
+            }
+        }
+        else
+        {
+            PR3 = 0;
+            OC3RS = 0;
+        }
+    }
+
     if (!PR3)
     {
         _LATB13 ^= 1;
@@ -532,6 +589,7 @@ void __attribute__((interrupt, no_auto_psv)) _DMA0Interrupt(void)
 
 void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
 {
+    static char stage = 0;
     switch (BufferA[0])
     {
     case 0xFF:
@@ -541,8 +599,7 @@ void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
             sethomef = 1;
             break;
         case 0xEE:
-            // printf("%.2f %.2f 0 0 %d\n", unwrapped_position[0], unwrapped_position[1], trajectory_finish_move);
-            sprintf(BufferB, "%.2f %.2f 0 0 %d\n", unwrapped_position[0], unwrapped_position[1], trajectory_finish_move);
+            sprintf(BufferB, "%.2f %.2f %.2f 0 %d\n", unwrapped_position[0] - 10, unwrapped_position[1] - 10, z_before - 15, trajectory_finish_move);
             dma_print();
             break;
         default:
@@ -550,37 +607,50 @@ void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
             dma_print();
         }
         break;
-    case 0xFE:
-        driver ^= 1;
-        sprintf(BufferB, "Move   \n");
-        DMA0STA = __builtin_dmaoffset(BufferB);
-        DMA0CNT = strlen(BufferB) - 1;
-        DMA0CONbits.CHEN = 1;  // Re-enable DMA0 Channel
-        DMA0REQbits.FORCE = 1; // Manual mode: Kick-start the first transfer
+    case 0x99:
+        if(stage == 4){
+            stage = 0;
+            update_position_trajectory = 1;
+        }
         break;
     case 0xFD:
-        if (!(x || y || z))
+        if (trajectory_finish_move && stage == 0)
         {
             x = (BufferA[1] << 8) | (BufferA[2]) + 10;
             y = (BufferA[3] << 8) | (BufferA[4]) + 10;
-            z = (BufferA[5] << 8) | (BufferA[6]);
-            update_position_trajectory = 1;
+            z = (BufferA[5] << 8) | (BufferA[6]) + 10;
+            sprintf(BufferB, "%d %d %d\n", x - 10, y - 10, z - 10);
+            dma_print();
+            stage = 4;
         }
         else
         {
-            printf(BufferB, "can't move\n");
-            DMA0STA = __builtin_dmaoffset(BufferB);
-            DMA0CNT = strlen(BufferB) - 1;
-            DMA0CONbits.CHEN = 1;  // Re-enable DMA0 Channel
-            DMA0REQbits.FORCE = 1; // Manual mode: Kick-start the first transfer
+            sprintf(BufferB, "can't move\n");
+            dma_print();
         }
+        break;
+    case 0xFC:
+        if (BufferA[6] == 0xFF)
+        {
+            if (BufferA[7] == 0xFF)
+            {
+                Griper(1);
+            }
+            else if (BufferA[7] == 0x00)
+            {
+                Griper(0);
+            }
+        }
+        if (BufferA[1] == 0xFF)
+        {
+            int theta = (BufferA[2] << 8) | (BufferA[3]);
+            // something about thetas
+        }
+
         break;
     default:
         sprintf(BufferB, "Error Type\n");
-        DMA0STA = __builtin_dmaoffset(BufferB);
-        DMA0CNT = strlen(BufferB) - 1;
-        DMA0CONbits.CHEN = 1;  // Re-enable DMA0 Channel
-        DMA0REQbits.FORCE = 1; // Manual mode: Kick-start the first transfer
+        dma_print();
     }
     IFS0bits.DMA1IF = 0; // Clear the DMA1 Interrupt Flag
 }
@@ -672,10 +742,12 @@ void start_program(void)
     DFLT2CONbits.QECK = 0b000; // clock divider Fcy/1
     DFLT2CONbits.QEOUT = 1;    // QEI2 Enable digital filter
 
-    U1MODEbits.STSEL = 0; // 1-stop bit
-    U1MODEbits.PDSEL = 0; // No Parity, 8-data bits
-    U1MODEbits.ABAUD = 0; // Autobaud Disabled
-    U1MODEbits.BRGH = 1;
+    
+    U1MODEbits.STSEL = 0;   // 1 Stop bit
+    U1MODEbits.PDSEL = 0;   // No Parity, 8 data bits
+    U1MODEbits.BRGH = 1;    // High Speed mode
+    U1MODEbits.URXINV = 0;  // UxRX idle state is '1'
+
     U1BRG = BRGVAL;         // BAUD Rate Setting for 2000000
     U1STAbits.UTXISEL0 = 0; // Interrupt after one Tx character is transmitted
     U1STAbits.UTXISEL1 = 0;
@@ -690,7 +762,7 @@ void start_program(void)
     DMA0CONbits.MODE = 1;
     DMA0CONbits.DIR = 1;
     DMA0CONbits.SIZE = 1;
-    DMA0CNT = 14; // 8 DMA requests
+    DMA0CNT = 14; // 15 DMA requests
     DMA0STA = __builtin_dmaoffset(BufferB);
     IFS0bits.DMA0IF = 0; // Clear DMA Interrupt Flag
     IEC0bits.DMA0IE = 1; // Enable DMA interrupt
