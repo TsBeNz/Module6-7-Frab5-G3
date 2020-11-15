@@ -544,6 +544,12 @@ void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void)
     if (!trajectory_finish_move)
     {
         trajectory_time += T_speed;
+        sprintf(BufferB, "%.2f %.2f %.2f %.2f %.2f \n", v[1], x2[1],velocity_set_point[1], position_set_point[1]-10, unwrapped_position[1]-10);
+            dma_print();
+        a = v[1];
+        b = x2[1];
+        c = aa;
+        d = bb;
     }
     if (trajectory_time > trajectory_time_set)
     {
@@ -646,7 +652,6 @@ void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
             int theta = (BufferA[2] << 8) | (BufferA[3]);
             // something about thetas
         }
-
         break;
     default:
         sprintf(BufferB, "Error Type\n");
