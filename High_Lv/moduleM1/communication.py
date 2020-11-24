@@ -16,11 +16,12 @@ class communication:
     void Move2point(4 parameter)\n
     """
 
-    def __init__(self, port="com9", baudrate=2000000):
+    def __init__(self, port="com4", baudrate=500000, offsetxy=0):
         try:
             self.ser = serial.Serial(port=port, baudrate=baudrate)
             self.ser.rts = 0
             self.status = 1
+            self.offsetxy = offsetxy
             while(True):
                 if(self.Readline() == "start"):
                     print("connect to dsPIC success")
@@ -54,6 +55,13 @@ class communication:
         if(self.status):
             return True
         return False
+
+    def Griper(self, status=1):
+        if(status == 1):
+            buffer = bytes([252, 0, 0, 0, 0, 0, 255, 0])
+        else:
+            buffer = bytes([252, 0, 0, 0, 0, 0, 0, 0])
+        self.ser.write(buffer)
 
     def Go2home(self):
         """
@@ -103,6 +111,8 @@ class communication:
         ========================
         Move Robot to position with Position Control
         """
+        x += self.offsetxy
+        y += self.offsetxy
         self.ser.write(
             bytes([253, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, 0]))
         while (True):
@@ -119,8 +129,7 @@ class communication:
                     break
                 else:
                     self.ser.write(
-                    bytes([253, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, 0]))
-            
+                        bytes([253, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, 0]))
 
     def Path_list(self, Path=[]):
         """
@@ -129,7 +138,7 @@ class communication:
         use Move2point() function for move robot\n
         """
         print("\n\n\n\n\n\n\n\nPath_list move is start\n")
-        if(PIC.Connect()):
+        if(self.Connect()):
             self.Go2home()
             i = 0
             while(True):
@@ -137,16 +146,22 @@ class communication:
                     print("finish move!!")
                     break
                 print("Move to " + str(Path[i]))
-                self.Move2point(Path[i][0], Path[i][1], Path[i][2], 0)
+                self.Move2point(int(Path[i][0]), int(Path[i][1]), int(Path[i][2]), 0)
+                if(len(Path[i]) == 5):
+                    if(Path[i][4] == 1):
+                        self.Griper(1)
+                    else:
+                        self.Griper(0)
+                # time.sleep(5)
                 print("Move success!!")
                 i += 1
 
 
-def photo_test(x,y):
+def photo_test(x, y):
     PIC = communication()
     PIC.Go2home()
-    x_buf = 0 
-    y_buf = 0 
+    x_buf = 0
+    y_buf = 0
     for i in range(x):
         x_buf = (i*400//x) + (200//x)
         for j in range(y):
@@ -155,14 +170,24 @@ def photo_test(x,y):
             print(str(x_buf) + " " + str(y_buf))
             time.sleep(5)
 
+
 if __name__ == '__main__':
     try:
         # photo_test(3,3)
-        PIC = communication()
-        inputtest = [[0,0,260,0],[64,41,250,0],[75,174,250,0],[259,286,150,0],[400,400,150,0],[400,400,380,0],[400,400,200,0],[400,400,380,0]]
-        # inputtest = [[100,10,400,0],[100,110,400,0],[100,210,400,0],[100,310,400,0],[100,410,400,0],[200,410,400,0],[200,310,400,0],[200,210,400,0],[200,110,400,0],[200,10,400,0],[300,10,400,0],[300,110,400,0],[300,210,400,0],[300,310,400,0],[300,410,400,0],[400,410,400,0],[400,310,400,0],[400,210,400,0],[400,110,400,0],[400,10,400,0]]
+        PIC = communication(port="com4", baudrate=500000, offsetxy=20)
+        # PIC.Go2home()
+        # inputtest = [[39,75,380,0],[39,75,110,0],[39,75,380,0]]
+        # inputtest = [[30,80,380,0],[71,334,380,0],[71,334,380,0],[71,334,380,0],[71,334,250,0],[210,331,250,0],[322,147,150,0],[350,110,150,0],[350,110,380,0],[400,400,380,0]]
+        # PIC.Path_list(inputtest)
+        # inputtest = [[71,334,400,0],[71,334,250,0],[210,331,250,0],[322,147,150,0],[350,110,150,0],[350,110,380,0]]
+        # inputtest = [[55, 320, 250], [192, 308, 250], [315, 98, 150]]
+        # PIC.Path_list(inputtest)
+
+        inputtest = [[55.0, 320.5, 0], [192, 308, 95.21328240475526], [315.0, 98.0, 0]]
         PIC.Path_list(inputtest)
 
+        # inputtest = [[100,10,400,0],[100,110,400,0],[100,210,400,0],[100,310,400,0],[100,410,400,0],[200,410,400,0],[200,310,400,0],[200,210,400,0],[200,110,400,0],[200,10,400,0],[300,10,400,0],[300,110,400,0],[300,210,400,0],[300,310,400,0],[300,410,400,0],[400,410,400,0],[400,310,400,0],[400,210,400,0],[400,110,400,0],[400,10,400,0]]
+        # inputtest = [[350,0,400,0],[350,40,400,0],[350,80,400,0],[350,120,400,0],[350,160,400,0],[350,200,400,0],[350,240,400,0],[350,280,400,0],[350,320,400,0],[350,360,400,0],[350,400,400,0],[350,340,400,0]]
         # PIC.Go2home()
         # print("eiei")
         # while(True):
@@ -176,11 +201,11 @@ if __name__ == '__main__':
         #         y_in = int(input("y : \n"))
         #         z_in = int(input("z : \n"))
         #         thata_in = int(input("thata : \n"))
-
         #     PIC.Move2point(x_in, y_in, z_in, 0)
+
         #     # while(True):
-            #     print(PIC.status_point())
-            #     time.sleep(0.5)
+        #     print(PIC.status_point())
+        #     time.sleep(0.5)
 
         # while(True):
         #     print(PIC.Readline())

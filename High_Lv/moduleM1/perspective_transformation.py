@@ -2,7 +2,9 @@ import cv2
 import cv2.aruco as aruco
 import numpy as np
 import os
-
+import time
+import glob
+from communication import communication
 # aruco tracker
 
 # import setting velue
@@ -18,12 +20,12 @@ tvecs = np.load(
     "d:/3rd_year/module/Module6-7/High_Lv/moduleM1/setting/"+"tvecs.npy")
 
 # real world coordinate setup
-cm_realworld_x = 24.6
-cm_realworld_y = 16
+cm_realworld_x = 400
+cm_realworld_y = 400
 
 # pixel coordinate setup
-setup_pixel_x = 922
-setup_pixel_y = 600
+setup_pixel_x = 1000
+setup_pixel_y = 1000
 
 # point for Perspective Transform (x,y)
 ax, ay = 562, 290
@@ -45,8 +47,24 @@ def mouse_click(event, x, y, flags, param):
         print("world coordinate: {}, {}, {} \n".format(
             x*(cm_realworld_x/setup_pixel_x), y*(cm_realworld_y/setup_pixel_y), 0))
 
+def resize_percent(input_image ,percent):
+    scale = (percent/100)
+    width = int(input_image.shape[0] * scale)
+    height = int(input_image.shape[1] * scale)
+    dim = (height, width)
+    return cv2.resize(input_image, dim, interpolation = cv2.INTER_AREA)
 
-def Perspective(camara_source=0, setup_workspace=True):
+def read_multiple_image():
+    real_path = '*.png'
+    images = [cv2.imread(file) for file in glob.glob(real_path)]
+    images2 = []
+    for i in images:
+        i = resize_percent(i, 60)
+        images2.append(i)
+    return images2
+
+
+def Perspective(camara_source=0, setup_workspace=True , Path=[]):
     """
     perspective transformation
     ==========================
@@ -75,73 +93,91 @@ def Perspective(camara_source=0, setup_workspace=True):
 
     cv2.namedWindow("tran")
     cv2.setMouseCallback("tran", mouse_click)
+    j = 0
     while True:
-        if camara_source == 0:
-            ret, frame = cap.read()
-        # cv2.imshow("raw video",frame)
+        PIC.Move2point(Path[j][0], Path[j][1], Path[j][2], 0)
+        print("eiei "+str(j))
+        time.sleep(4)
+        while True:
+            if(j == len(Path)):
+                    print("finish move!!")
+                    break
+            stage_eiei = 0
+            if camara_source == 0:
+                ret, frame = cap.read()
+            # cv2.imshow("raw video",frame)
 
-        elif camara_source == 1:
-            frame = cv2.imread(
-                'd:/3rd_year/module/Module6-7/High_Lv/moduleM1/output_pic/raw.jpg')
+            elif camara_source == 1:
+                frame = cv2.imread(
+                    'd:/3rd_year/module/Module6-7/High_Lv/moduleM1/output_pic/raw.jpg')
 
-        h,  w = frame.shape[:2]
-        # print(str(h)+" "+str(w)+"\n")
-        newcameramtx, roi = cv2.getOptimalNewCameraMatrix(
-            mtx, dist, (w, h), 1, (w, h))
-        dst = cv2.undistort(frame, mtx, dist, None, newcameramtx)
-        x, y, w, h = roi
-        # cv2.imshow("undisbefore",dst)
+            h,  w = frame.shape[:2]
+            # print(str(h)+" "+str(w)+"\n")
+            newcameramtx, roi = cv2.getOptimalNewCameraMatrix(
+                mtx, dist, (w, h), 1, (w, h))
+            dst = cv2.undistort(frame, mtx, dist, None, newcameramtx)
+            x, y, w, h = roi
+            # cv2.imshow("undisbefore",dst)
 
-        dst = dst[y:y+h, x:x+w]  # remap picture after undistort
+            dst = dst[y:y+h, x:x+w]  # remap picture after undistort
 
-        # plot point real frame
-        gray = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
-        aruco_dict = aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
-        parameters = aruco.DetectorParameters_create() 
-        corners, ids, rejected_img_points = aruco.detectMarkers(gray, aruco_dict,
-                                                                    parameters=parameters,
-                                                                    cameraMatrix=mtx,
-                                                                    distCoeff=dist)
-        global ax,ay,bx,by,cx,cy,dx,dy
-        if np.all(ids is not None):
-            if (len(ids) == 4):
-                for i in range(0, len(ids)): 
-                    eiei = corners[i].tolist()
-                    if (int((ids.tolist())[i][0])) == 2:
-                        ax,ay = eiei[0][2]
-                    elif (int((ids.tolist())[i][0])) == 0:
-                        bx,by = eiei[0][2]
-                    elif (int((ids.tolist())[i][0])) == 3:
-                        cx,cy = eiei[0][2]
-                    elif (int((ids.tolist())[i][0])) == 1:
-                        dx,dy = eiei[0][2]
-                    rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners[i], 0.02,mtx ,dist)
-                    # (rvec - tvec).any()  # get rid of that nasty numpy value array error
-                    aruco.drawDetectedMarkers(dst, corners)  # Draw A square around the markers
-                    aruco.drawAxis(dst, mtx ,dist, rvec, tvec, 0.01)  # Draw Axis
-        # cv2.circle(dst, (int(ax), int(ay)), 1, (0, 0, 255), -1)
-        # cv2.circle(dst, (int(bx), int(by)), 1, (0, 0, 255), -1)
-        # cv2.circle(dst, (int(cx), int(cy)), 1, (0, 0, 255), -1)
-        # cv2.circle(dst, (int(dx), int(dy)), 1, (0, 0, 255), -1)
-        cv2.imshow("undis",dst)
+            # plot point real frame
+            gray = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
+            aruco_dict = aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
+            parameters = aruco.DetectorParameters_create() 
+            corners, ids, rejected_img_points = aruco.detectMarkers(gray, aruco_dict,
+                                                                        parameters=parameters,
+                                                                        cameraMatrix=mtx,
+                                                                        distCoeff=dist)
+            global ax,ay,bx,by,cx,cy,dx,dy
+            if np.all(ids is not None):
+                if (len(ids) == 4):
+                    stage_eiei = 1
+                    for i in range(0, len(ids)): 
+                        eiei = corners[i].tolist()
+                        if (int((ids.tolist())[i][0])) == 3:
+                            ax,ay = eiei[0][0]
+                        elif (int((ids.tolist())[i][0])) == 1:
+                            bx,by = eiei[0][0]
+                        elif (int((ids.tolist())[i][0])) == 2:
+                            cx,cy = eiei[0][0]
+                        elif (int((ids.tolist())[i][0])) == 0:
+                            dx,dy = eiei[0][0]
+                        rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners[i], 0.02,mtx ,dist)
+                        # (rvec - tvec).any()  # get rid of that nasty numpy value array error
+                        # aruco.drawDetectedMarkers(dst, corners,ids)  # Draw A square around the markers
+                        # aruco.drawAxis(dst, mtx ,dist, rvec, tvec, 0.01)  # Draw Axis
+            # cv2.circle(dst, (int(ax), int(ay)), 1, (0, 0, 255), -1)
+            # cv2.circle(dst, (int(bx), int(by)), 1, (0, 0, 255), -1)
+            # cv2.circle(dst, (int(cx), int(cy)), 1, (0, 0, 255), -1)
+            # cv2.circle(dst, (int(dx), int(dy)), 1, (0, 0, 255), -1)
+            cv2.imshow("undis",dst)
 
-        # Perspective Transform
-        pts1 = np.float32([[ax, ay], [bx, by], [cx, cy], [dx, dy]])
-        pts2 = np.float32([[0, 0], [setup_pixel_x, 0], [0, setup_pixel_y], [
-                          setup_pixel_x, setup_pixel_y]])
-        matrix = cv2.getPerspectiveTransform(pts1, pts2)
-        result = cv2.warpPerspective(dst, matrix, (setup_pixel_x, setup_pixel_y))
-        cv2.imshow("tran", result)
+            # Perspective Transform
+            pts1 = np.float32([[ax, ay], [bx, by], [cx, cy], [dx, dy]])
+            pts2 = np.float32([[0, 0], [setup_pixel_x, 0], [0, setup_pixel_y], [
+                            setup_pixel_x, setup_pixel_y]])
+            matrix = cv2.getPerspectiveTransform(pts1, pts2)
+            result = cv2.warpPerspective(dst, matrix, (setup_pixel_x, setup_pixel_y))
+            cv2.imshow("tran", result)
+            if stage_eiei == 1:
+                cv2.imwrite(str(j)+".png",result)
+                time.sleep(3)
+                j+=1
+                break
 
-        key = cv2.waitKey(20) & 0xFF
-        if key == ord('q') or key == ord('ๆ'):
-            cv2.destroyAllWindows()
-            break
-        elif key == ord('s') or key == ord('ฆ'):
-            # cv2.imwrite("output_pic/raw.jpg",frame)
-            # cv2.imwrite("output_pic/undis.jpg",dst)
-            # cv2.imwrite("output_pic/tran.jpg",result)
-            cv2.destroyAllWindows()
+            key = cv2.waitKey(20) & 0xFF
+            if key == ord('q') or key == ord('ๆ'):
+                cv2.destroyAllWindows()
+                break
+            elif key == ord('s') or key == ord('ฆ'):
+                # cv2.imwrite("output_pic/raw.jpg",frame)
+                # cv2.imwrite("output_pic/undis.jpg",dst)
+                # cv2.imwrite("output_pic/tran.jpg",result)
+                cv2.destroyAllWindows()
+                break
+        if(j == len(Path)):
+            print("finish move!!")
             break
 
 # def setup_world2(cap):
@@ -209,6 +245,15 @@ def mouse_click_setup_world(event, x, y, flags, param):
 
 if __name__ == '__main__':
     try:
-        Perspective()
+        PIC = communication()
+        PIC.Go2home()
+        inputtest = [[350,0,400,0],[350,60,400,0],[350,120,400,0],[350,180,400,0],[350,240,400,0],[350,300,400,0],[350,360,400,0],[350,420,400,0]]
+        Perspective(Path= inputtest)
+        images = read_multiple_image()
+        set_of_image_to_stack = tuple(images)
+        sequence = np.stack(set_of_image_to_stack, axis=3)
+        result = np.median(sequence, axis=3).astype(np.uint8)
+        cv2.imwrite("kuy.png",result)
+        cv2.imshow("kuy world", result)
     except KeyboardInterrupt:
         print("\n\n\n\nShutdown ...\n\n\n\n")

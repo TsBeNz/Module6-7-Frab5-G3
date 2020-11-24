@@ -44,7 +44,7 @@ while True:
             cv2.circle(frame, (int(x), int(y)), 2, (0, 0, 255), -1)
             rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners[i], 0.02,mtx ,dist)
             (rvec - tvec).any()  # get rid of that nasty numpy value array error
-            aruco.drawDetectedMarkers(frame, corners)  # Draw A square around the markers
+            aruco.drawDetectedMarkers(frame, corners,ids)  # Draw A square around the markers
             aruco.drawAxis(frame, mtx ,dist, rvec, tvec, 0.01)  # Draw Axis
     # print("\n\n\n")
 # Display the resulting frame
