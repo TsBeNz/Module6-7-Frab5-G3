@@ -625,7 +625,7 @@ void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
     case 0xFC:
         if (BufferA[6] == 0xFF)
         {
-            OC4RS = 1200; //giper
+            OC4RS = 1100; //giper
         }
         else
         {
@@ -634,7 +634,9 @@ void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
         if (BufferA[1] == 0xFF)
         {
             int theta = (BufferA[2] << 8) | (BufferA[3]); //0-180
-            OC3RS = 650 + (int)(theta * (600 / 180));
+            OC3RS = 469 + (int)(theta * 5.205555); //(937 / 180)
+            sprintf(BufferB, "%d %d\n",OC3RS,theta);
+            dma_print();
             // something about thetas
         }
         break;
@@ -695,7 +697,7 @@ void start_program(void)
     OC2CONbits.OCTSEL = 0;  //OC2 use timer2 as counter source
     OC2CONbits.OCM = 0b110; //set to pwm without fault pin mode
 
-    OC3RS = 950;
+    OC3RS = 469;
     OC3CONbits.OCM = 0b000; //Disable Output Compare Module
     OC3CONbits.OCTSEL = 1;  //OC3 use timer3 as counter source
     OC3CONbits.OCM = 0b110; //set to pwm without fault pin mode
