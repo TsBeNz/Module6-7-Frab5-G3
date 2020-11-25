@@ -204,7 +204,7 @@ def Perspective(debug=0, index_pic=0, cap=cv2.VideoCapture(0, cv2.CAP_DSHOW)):
         
         print(count)
         key = cv2.waitKey(20) & 0xFF
-        if count >= 10:
+        if count >= 5:
             cv2.imwrite(
                 "C:/github/Module6-7/High_Lv/moduleM1/pic_input/"+str(index_pic)+".png", result)
             return result
@@ -221,6 +221,7 @@ if __name__ == '__main__':
         cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         cap.set(3, 1280)
         cap.set(4, 720)
+        cap.set(cv2.CAP_PROP_AUTOFOCUS,0) # turn the autofocus off
         Square_Root = communication()
         Square_Root.Go2home()
         Path = [[350, 0, 400, 0], [350, 40, 400, 0], [350, 80, 400, 0], [350, 120, 400, 0], [350, 160, 400, 0],
@@ -235,7 +236,7 @@ if __name__ == '__main__':
                 break
             print("Move to " + str(Path[i]))
             Square_Root.Move2point(Path[i][0], Path[i][1], Path[i][2], 0)
-            time.sleep(2)
+            # time.sleep(2)
             print("Move success!!")
             i += 1
             images.append(Perspective(index_pic=i, cap=cap))
