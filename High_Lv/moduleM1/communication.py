@@ -10,25 +10,31 @@ class communication:
     Function List
     ==============
     String Readline()\n
-    void ResetdsPIC()\n
     bool Connect()\n
     void Go2home()\n
-    void Move2point(4 parameter)\n
+    list Status_point()\n
+    void Offset()\n
+    void ResetdsPIC()\n
+    void Move2point()\n
+    void Griper()\n
+    void Path_list()\n
+    void Griping_Rod()\n
     """
 
-    def __init__(self, port="com4", baudrate=500000, offsetxy=0):
+    def __init__(self, port="com4", baudrate=500000):
         try:
             self.ser = serial.Serial(port=port, baudrate=baudrate)
             self.ser.rts = 0
             self.status = 1
-            self.offsetxy = offsetxy
+            self.offsetxy = 0
+            self.offsetz = 0
             while(True):
                 if(self.Readline() == "start"):
                     print("connect to dsPIC success")
                     break
         except:
-            print("\n\nCommunication to dsPIC Error !!!!!!\nComport = " +
-                  str(port)+" ?\n\n")
+            print("\nCommunication to dsPIC Error !!!!!!\nComport = " +
+                  str(port)+" ?\n")
             self.status = 0
 
     def Readline(self):
@@ -56,20 +62,13 @@ class communication:
             return True
         return False
 
-    def Griper(self, status=1):
-        if(status == 1):
-            buffer = bytes([252, 0, 0, 0, 0, 0, 255, 0])
-        else:
-            buffer = bytes([252, 0, 0, 0, 0, 0, 0, 0])
-        self.ser.write(buffer)
-
     def Go2home(self):
         """
-        Set Home Robot
+        Set Home Square_Root
         ==============
         """
         print("Go2home")
-        buffer = bytes([255, 0, 0, 0, 0, 0, 0, 255])
+        buffer = bytes([255, 17, 0, 0, 0, 0, 0, 0, 0])
         self.ser.write(buffer)
         status = 0
         while(True):
@@ -81,23 +80,32 @@ class communication:
             elif(data == "Y set" and status == 2):
                 status = 3
             elif(data == "set home finish" and status == 3):
+                time.sleep(0.1)  # wait low lv update status
+                while True:
+                    if(int(self.Status_point()[4]) == 1):
+                        break
+                    time.sleep(0.1)
                 print("Home success!!")
                 break
 
-    def status_point(self):
+    def Status_point(self):
         """
         read status from dsPIC
         ==============
         """
-        buffer = bytes([255, 0, 0, 0, 0, 0, 0, 238])
+        buffer = bytes([255, 34, 0, 0, 0, 0, 0, 0, 0])
         self.ser.write(buffer)
-        data = (self.Readline().split(" "))
+        data = (self.Readline().split())
         return data
+
+    def Offset(self, offsetxy=0, offsetz=0):
+        self.offsetxy = offsetxy
+        self.offsetz = offsetz
 
     def ResetdsPIC(self):
         """
-        Reset dsPIC
-        ============
+        Reset dsPIC in Square_Root
+        ==========================
         **not terminate Pyserial
         """
         self.ser.rts = 1
@@ -105,121 +113,138 @@ class communication:
         self.ser.rts = 0
         time.sleep(1)
 
-    def Move2point(self, x=0, y=0, z=0, theta=0):
+    def Move2point(self, x=0, y=0, z=0, theta=0, debug=0):
         """
         Move By Trajectory Control
         ========================
-        Move Robot to position with Position Control
+        Move Square_Root to position with\n
+        trajectory && cascade control with velocity feedforward
         """
         x += self.offsetxy
         y += self.offsetxy
         self.ser.write(
-            bytes([253, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, 0]))
+            bytes([255, 51, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, theta & 0x00FF]))
         while (True):
             data = self.Readline()
             if(data == "can't move"):
                 self.ser.write(
-                    bytes([253, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, 0]))
+                    bytes([255, 52, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, theta & 0x00FF]))
+                if debug:
+                    print("Status Error")
                 time.sleep(0.05)
             else:
                 data_list = data.split()
-                if(int(data_list[0]) == x and int(data_list[1]) == y and int(data_list[2]) == z):
+                if(int(data_list[0]) == x and int(data_list[1]) == y and int(data_list[2]) == z and int(data_list[3]) == theta):
                     self.ser.write(
-                        bytes([153, 0, 0, 0, 0, 0, 0, 0]))
+                        bytes([255, 153, 0, 0, 0, 0, 0, 0, 0]))
                     break
                 else:
                     self.ser.write(
-                        bytes([253, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, 0]))
+                        bytes([255, 52, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, theta & 0x00FF]))
+                    if debug:
+                        print("Data Error")
 
-    def Path_list(self, Path=[]):
+    def Griper(self, status=0):
+        """
+        Control Griper  
+        ========================
+        status 0 --> Not Griping
+        status 1 --> Griping
+        """
+        if(status == 1):
+            buffer = bytes([255, 68, 255, 255, 0, 0, 0, 0, 0])
+        else:
+            buffer = bytes([252, 68, 255, 0, 0, 0, 0, 0, 0])
+        self.ser.write(buffer)
+
+    def Path_list(self, Path=[], Home=False):
         """
         Path Move By Position Control
         ========================
-        use Move2point() function for move robot\n
+        use Move2point() function for move Square_Root\n
+        Home is use for Force Sethome
         """
         print("\n\n\n\n\n\n\n\nPath_list move is start\n")
         if(self.Connect()):
-            self.Go2home()
+            if(Home):
+                self.Go2home()
             i = 0
             while(True):
                 if(i == len(Path)):
                     print("finish move!!")
                     break
                 print("Move to " + str(Path[i]))
-                self.Move2point(int(Path[i][0]), int(Path[i][1]), int(Path[i][2]), 0)
+                self.Move2point(int(Path[i][0]), int(
+                    Path[i][1]), int(Path[i][2]), int(Path[i][3]),  debug=1)
+
+                time.sleep(0.1)  # wait low lv update status
+                while True:
+                    if(int(self.Status_point()[4]) == 1):
+                        break
+                    time.sleep(0.1)
+                print("Move success!!")
                 if(len(Path[i]) == 5):
                     if(Path[i][4] == 1):
                         self.Griper(1)
                     else:
                         self.Griper(0)
-                # time.sleep(5)
-                print("Move success!!")
                 i += 1
 
+    def Griping_Rod(self, point=0):
+        """
+        Square_Root was move to Griping Rod
+        ========================
+        Square_Root can move to Griping Rod in some conners\n
+        """
+        print("Moving to Griping Rod")
+        if point == 0:
+            print("Conner 0")
+            inputtest = [[39, 75, 400, 0, 0], [
+                39, 75, 110, 0, 1], [39, 75, 400, 0]]
+            self.Path_list(inputtest, Home=True)  # force Go2Home
+        time.sleep(0.5)
 
-def photo_test(x, y):
-    PIC = communication()
-    PIC.Go2home()
-    x_buf = 0
-    y_buf = 0
-    for i in range(x):
-        x_buf = (i*400//x) + (200//x)
-        for j in range(y):
-            y_buf = (j*400//y) + (200//y)
-            PIC.Move2point(x_buf, y_buf, 400, 0)
-            print(str(x_buf) + " " + str(y_buf))
-            time.sleep(5)
+    def Manual_Control(self):
+        while(True):
+            mode = input("1 for sent new position\n2 for read position\nOther of exit from manu\nManu : ")
+            if(int(mode) == 1):
+                print("input your position")
+                x_in = int(input("x : \n"))
+                while(x_in > 400):
+                    print("Position Out of Range")
+                    x_in = int(input("x : \n"))
+                    
+                y_in = int(input("y : \n"))
+                while(y_in > 400):
+                    print("Position Out of Range")
+                    y_in = int(input("y : \n"))
+                z_in = int(input("z : \n"))
+                while(z_in > 400):
+                    print("Position Out of Range")
+                    z_in = int(input("z : \n"))
+                theta_in = int(input("theta : \n"))
+                while(theta_in > 180):
+                    print("Position Out of Range")
+                    theta_in = int(input("theta : \n"))
+                self.Move2point(x=x_in, y=y_in, z=z_in, theta=theta_in)
+
+            elif(int(mode) == 2):
+                print(self.Status_point())
+            else:
+                if (input("exit manual mode? (y or N)").lower() == 'y'):
+                    break
 
 
 if __name__ == '__main__':
     try:
-        # photo_test(3,3)
-        PIC = communication(port="com4", baudrate=500000, offsetxy=20)
-        # PIC.Go2home()
-        # inputtest = [[39,75,380,0],[39,75,110,0],[39,75,380,0]]
-        # inputtest = [[30,80,380,0],[71,334,380,0],[71,334,380,0],[71,334,380,0],[71,334,250,0],[210,331,250,0],[322,147,150,0],[350,110,150,0],[350,110,380,0],[400,400,380,0]]
-        # PIC.Path_list(inputtest)
-        inputtest = [[71,334,400,0],[71,334,250,0],[210,331,250,0],[322,147,150,0],[350,110,150,0],[350,110,380,0]]
-        # inputtest = [[55, 320, 250], [192, 308, 250], [315, 98, 150]]
-        PIC.Path_list(inputtest)
-
-        # inputtest = [[55.0, 320.5, 0], [192, 308, 95.21328240475526], [315.0, 98.0, 0]]
-        # PIC.Path_list(inputtest)
-
-        # inputtest = [[100,10,400,0],[100,110,400,0],[100,210,400,0],[100,310,400,0],[100,410,400,0],[200,410,400,0],[200,310,400,0],[200,210,400,0],[200,110,400,0],[200,10,400,0],[300,10,400,0],[300,110,400,0],[300,210,400,0],[300,310,400,0],[300,410,400,0],[400,410,400,0],[400,310,400,0],[400,210,400,0],[400,110,400,0],[400,10,400,0]]
-        # inputtest = [[350,0,400,0],[350,40,400,0],[350,80,400,0],[350,120,400,0],[350,160,400,0],[350,200,400,0],[350,240,400,0],[350,280,400,0],[350,320,400,0],[350,360,400,0],[350,400,400,0],[350,340,400,0]]
-        # PIC.Go2home()
-        # print("eiei")
-        # while(True):
-        #     x_in = int(input("x : \n"))
-        #     y_in = int(input("y : \n"))
-        #     z_in = int(input("z : \n"))
-        #     thata_in = int(input("thata : \n"))
-        #     while(x_in > 450 or y_in > 450 or z_in > 400 or thata_in > 420):
-        #         print("data out of range")
-        #         x_in = int(input("x : \n"))
-        #         y_in = int(input("y : \n"))
-        #         z_in = int(input("z : \n"))
-        #         thata_in = int(input("thata : \n"))
-        #     PIC.Move2point(x_in, y_in, z_in, 0)
-
-        #     # while(True):
-        #     print(PIC.status_point())
-        #     time.sleep(0.5)
-
-        # while(True):
-        #     print(PIC.Readline())
-        # while(True):
-        #     i+=3
-        #     x=round(170*(math.sin((i*math.pi / 180)-math.pi/2))+220)-1
-        #     y=round(170*(math.cos((i*math.pi / 180)-math.pi/2))+220)-1
-        #     inputtest.append([x,y,0,0])
-        #     if(i >= 360):
-        #         break
-        # PIC.Path_list(inputtest)
-        # inputtest = [[50,50,0,0],[50,400,20,0],[400,400,300,0],[400,50,20,0],[50,50,300,0],[200,200,0,0]]
-        # while(True):
-        #
+        Square_Root = communication(port="com4", baudrate=500000)
+        Square_Root.Offset(offsetxy=20, offsetz=0)
+        Square_Root.Go2home()
+        Square_Root.Manual_Control()
+        # Square_Root.Griping_Rod(point = 0)
+        # inputtest = [[71, 334, 400, 0], [71, 334, 250, 0], [210, 331, 250, 90], [
+        #     322, 147, 150, 90], [350, 110, 150, 90], [350, 110, 380, 180]]
+        # Square_Root.Path_list(inputtest)
 
     except KeyboardInterrupt:
         print("\nKeyboardInterrupt!!!!\n\n\nShutdown ...\n\n\n\n")
