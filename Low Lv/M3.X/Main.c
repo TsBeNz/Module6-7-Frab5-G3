@@ -16,12 +16,12 @@
 #define BRGVAL ((FCY / BAUDRATE) / 4) - 1
 
 #define PI 3.14159265
-#define PWM_period 10000
+#define PWM_period 16666
 #define SERVO_period 12500
 #define t1_prescaler 0b01
 #define t1_period 10000
 #define t4_prescaler 0b01
-#define t4_period 10000
+#define t4_period 5000
 #define t5_prescaler 0b01
 #define t5_period 50000
 #define servominpulse 400
@@ -30,7 +30,7 @@
 
 // #endif
 
-#define T_speed 0.002
+#define T_speed 0.001
 #define T_speed_pow2 (T_speed * T_speed)
 #define T_speed_pow3 (T_speed * T_speed * T_speed)
 #define T_speed_pow4 (T_speed * T_speed * T_speed * T_speed)
@@ -48,8 +48,8 @@ volatile float x1[2] = {0, 0};                                              // p
 volatile float x2[2] = {0, 0};                                              // velocity
 volatile float pre_velocity_error[2] = {0, 0}, velocity_i_term[2] = {0, 0}; // velocity PID
 volatile float unwrapped_position[3] = {0.0, 0.0, 0.0};
-volatile float velocity_set_point[3] = {0, 0, 0};                           // max +-90 mm/s
-volatile float position_set_point[3] = {0, 0, 0};                           // max 430 mm
+volatile float velocity_set_point[3] = {0, 0, 0}; // max +-90 mm/s
+volatile float position_set_point[3] = {0, 0, 0}; // max 430 mm
 volatile char position_enable[3] = {1, 1, 1}, velocity_enable[3] = {1, 1, 1};
 volatile float co_trajectory[3][3] = {
     {0, 0, 0},
@@ -142,28 +142,28 @@ void set_home()
     PWM1CON1bits.PEN2H = 1;
     while (_RA2)
     {
-        P1TPER = 1000;      //period = 12500 PWM Module stepper
+        P1TPER = 1000; //period = 12500 PWM Module stepper
         P1DC2 = P1TPER;
-        _LATB13 = 0;        //down
+        _LATB13 = 0; //down
     }
-    delay(200);
+    delay(150);
     while (!_RA2)
     {
         P1TPER = 1000;
         P1DC2 = P1TPER;
-        _LATB13 = 1;        //up
+        _LATB13 = 1; //up
     }
     int i = 0;
     PWM1CON1bits.PEN2H = 0;
 
-    _LATB13 = 1;            //up
+    _LATB13 = 1; //up
     printf("Z set\n");
 
     while (_RB2)
     {
         motor_driveX(30);
     }
-    delay(300);
+    delay(120);
     motor_driveX(-18);
     while (set_home_x_f)
     {
@@ -176,7 +176,7 @@ void set_home()
 
     _LATA0 = 1;
     _LATA1 = 1;
-    delay(300);
+    delay(120);
 
     POS1CNT = 0;
     printf("X set\n");
@@ -186,7 +186,7 @@ void set_home()
     {
         motor_driveY(30);
     }
-    delay(300);
+    delay(120);
     motor_driveY(-20);
     while (set_home_y_f)
     {
@@ -199,7 +199,7 @@ void set_home()
 
     _LATA4 = 1;
     _LATB4 = 1;
-    delay(300);
+    delay(120);
     POS2CNT = 0;
     printf("Y set\n");
     i = 0;
@@ -248,7 +248,7 @@ void trajectory_gen(unsigned int x, unsigned int y, unsigned int z)
             {
                 ds_set[i] = setpoint[i] - unwrapped_position[i];
             }
-            tf = abs(ds_set[i]) / 38;   //42
+            tf = abs(ds_set[i]) / 42; //42
             if (tf > t)
             {
                 t = tf;
@@ -264,15 +264,15 @@ void trajectory_gen(unsigned int x, unsigned int y, unsigned int z)
             co_trajectory[0][i] = unwrapped_position[i];
             co_trajectory[1][i] = ((3 * t * (ds_set[i])) / (t_pow3));
             co_trajectory[2][i] = ((-2 * (ds_set[i])) / (t_pow3));
-            velocity_set_point[i] = 0;              // max 90 mm/s
-            position_set_point[i] = 0;              // max 430 mm
+            velocity_set_point[i] = 0; // max 90 mm/s
+            position_set_point[i] = 0; // max 430 mm
             position_enable[i] = 1;
         }
         co_trajectory[0][2] = z_before;
         co_trajectory[1][2] = ((3 * t * (ds_set[2])) / (t_pow3));
         co_trajectory[2][2] = ((-2 * (ds_set[2])) / (t_pow3));
-        velocity_set_point[2] = 0;                  // max 90 mm/s
-        position_set_point[2] = 0;                  // max 430 mm
+        velocity_set_point[2] = 0; // max 90 mm/s
+        position_set_point[2] = 0; // max 430 mm
         position_enable[2] = 1;
         z_before = z;
         trajectory_time_set = t;
@@ -315,22 +315,21 @@ void __attribute__((interrupt, no_auto_psv)) _INT2Interrupt(void)
 
 void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void)
 {
-    _T1IF = 0;                          //clear interrupt flag
+    _T1IF = 0; //clear interrupt flag
 }
 
 void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void)
 {
-    float aa, bb, cc, dd, ee;           // for print debug
-    static float sigma_a[2] = {6, 6};   // adjustable
-    static float sigma_w[2] = {1, 1};   // adjustable
-    static float p11[2] = {1.0, 1.0};   // adjustable
+    static float sigma_a[2] = {6, 6}; // adjustable
+    static float sigma_w[2] = {1, 1}; // adjustable
+    static float p11[2] = {1.0, 1.0}; // adjustable
     static float p12[2] = {0, 0};
     static float p21[2] = {0, 0};
-    static float p22[2] = {1.0, 1.0};   // adjustable
-    static float pre_position_error[2] = {1, 1}, position_i_term[2] = {0, 0}, cmd_velocity[2] = {0, 0};
-    static float position_kp[2] = {0, 0}, position_ki[2] = {0, 0}, position_kd[2] = {0, 0};
-    static float pwm_output[2] = {0, 0};
-    static int velocity_kp[2] = {270, 270}, velocity_ki[2] = {2, 2}, velocity_kd[2] = {170, 170};
+    static float p22[2] = {1.0, 1.0}; // adjustable
+    static float cmd_velocity[2] = {0, 0};
+    static float position_kp[2] = {0.2, 0.2};
+    static int velocity_kp[2] = {360, 310}, velocity_ki[2] = {1.1, 1.3}, velocity_kd[2] = {100, 100};
+    static float pwm_output[2] = {0, 0}, velocity_input[2] = {0, 0};
     static float trajectory_time = 0;
     float position_error[2] = {0, 0};
     long int position[2] = {(long int)POS1CNT, (long int)POS2CNT}; //read data form encoder
@@ -360,7 +359,7 @@ void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void)
         {
             ds += 65535;
         }
-        float ds_mm = (float)ds / 102.4;    // change pulse to mm
+        float ds_mm = (float)ds / 546.1333; // change pulse to mm
         v[i] = ds_mm / T_speed;             // velocity [mm/s]
         unwrapped_position[i] += ds_mm;     // update new position
 
@@ -382,8 +381,8 @@ void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void)
         p22[i] = -p22[i] * (p22[i] / (R + p22[i]) - 1);
         //update variable of kaman filter
         pre_position[i] = position[i];
-        x1[i] = x1_new;         // position
-        x2[i] = x2_new;         // velocity
+        x1[i] = x1_new; // position
+        x2[i] = x2_new; // velocity
 
         // position control //
         // float position_error = position_set_point[i] - unwrapped_position[i];
@@ -397,23 +396,22 @@ void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void)
         cmd_velocity[i] = (position_kp[i] * position_error[i]);
 
         // calculation velocity_cmd = (velocity feedforward) + (velocity output form position control)
-        float velocity_input = velocity_set_point[i] + position_enable[i] * cmd_velocity[i];
+        velocity_input[i] = velocity_set_point[i] + position_enable[i] * cmd_velocity[i];
 
-        if (velocity_input >= 90.0)
+        if (velocity_input[i] >= 90.0)
         {
-            velocity_input = 90.0;
+            velocity_input[i] = 90.0;
         }
-        else if (velocity_input <= -90.0)
+        else if (velocity_input[i] <= -90.0)
         {
-            velocity_input = -90.0;
+            velocity_input[i] = -90.0;
         }
 
         // velocity control //
-        float velocity_error = velocity_input - x2[i];
+        float velocity_error = velocity_input[i] - x2[i];
         velocity_i_term[i] += velocity_error;
         float velocity_d_term = velocity_error - pre_velocity_error[i];
         pwm_output[i] = (velocity_kp[i] * velocity_error) + (velocity_ki[i] * velocity_i_term[i]) + (velocity_kd[i] * velocity_d_term);
-        aa = pwm_output[i];
         //update variable of velocity control
         pre_velocity_error[i] = velocity_error;
     }
@@ -433,11 +431,11 @@ void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void)
             P1DC2 = P1TPER;
             if (velocity_set_point[2] > 0)
             {
-                _LATB13 = 1;    //up
+                _LATB13 = 1; //up
             }
             else
             {
-                _LATB13 = 0;    //down
+                _LATB13 = 0; //down
             }
         }
         else
@@ -517,16 +515,18 @@ void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void)
     if (!trajectory_finish_move)
     {
         trajectory_time += T_speed;
-        a = v[0];
+        a = velocity_input[0];
         b = x2[0];
         c = velocity_set_point[0];
         d = unwrapped_position[0];
+        e = position_set_point[0];
+        //        T5CONbits.TON = 1;
     }
     if (trajectory_time > trajectory_time_set)
     {
         trajectory_time = 0;
         trajectory_finish_move = 1;
-        // T2CONbits.TON = 0;
+        //        T5CONbits.TON = 0;
     }
     _T4IF = 0;
 }
@@ -548,7 +548,7 @@ void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void)
 
 void __attribute__((interrupt, no_auto_psv)) _DMA0Interrupt(void)
 {
-    IFS0bits.DMA0IF = 0;        // Clear the DMA0 Interrupt Flag;
+    IFS0bits.DMA0IF = 0; // Clear the DMA0 Interrupt Flag;
 }
 
 void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
@@ -562,17 +562,17 @@ void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
             sethomef = 1;
             break;
         case 0x22:
-            sprintf(BufferB, "%.2f %.2f %.2f %d %d\n", unwrapped_position[0] - 10, unwrapped_position[1] - 10, z_before - 15,theta, trajectory_finish_move);
+            sprintf(BufferB, "%.2f %.2f %.2f %d %d\n", unwrapped_position[0] - 10, unwrapped_position[1] - 10, z_before - 15, theta, trajectory_finish_move);
             dma_print();
             break;
         case 0x33:
-            if (trajectory_finish_move && stage ==0)
+            if (trajectory_finish_move && stage == 0)
             {
                 x = (BufferA[2] << 8) | (BufferA[3]) + 10;
                 y = (BufferA[4] << 8) | (BufferA[5]) + 10;
                 z = (BufferA[6] << 8) | (BufferA[7]) + 10;
                 theta = BufferA[8];
-                sprintf(BufferB, "%d %d %d %d\n", x - 10, y - 10, z - 10,theta);
+                sprintf(BufferB, "%d %d %d %d\n", x - 10, y - 10, z - 10, theta);
                 dma_print();
                 stage = 1;
             }
@@ -589,7 +589,7 @@ void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
                 y = (BufferA[4] << 8) | (BufferA[5]) + 10;
                 z = (BufferA[6] << 8) | (BufferA[7]) + 10;
                 theta = BufferA[8];
-                sprintf(BufferB, "%d %d %d %d\n", x - 10, y - 10, z - 10,theta);
+                sprintf(BufferB, "%d %d %d %d\n", x - 10, y - 10, z - 10, theta);
                 dma_print();
                 stage = 1;
             }
@@ -600,13 +600,20 @@ void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
             }
             break;
         case 0x44:
-            if (BufferA[2] == 0xFF && BufferA[3] == 0xFF)
+            if (BufferA[2] == 0xFF)
             {
-                OC4RS = 1100;       //griper
-            }
-            else if (BufferA[2] == 0xFF && BufferA[3] == 0x00)
-            {
-                OC4RS = 800;        //griper
+                if (BufferA[3] == 0xFF)
+                {
+                    OC4RS = 1100; //griper
+                    sprintf(BufferB, "griper true\n");
+                    dma_print();
+                }
+                else
+                {
+                    OC4RS = 900; //griper
+                    sprintf(BufferB, "griper false\n");
+                    dma_print();
+                }
             }
             break;
         case 0x99:
@@ -656,8 +663,8 @@ void start_program(void)
 
     initPLL();
     T1CONbits.TCKPS = t1_prescaler;
-    T2CONbits.TCKPS = 0b01;     //set timer prescaler to 1:8 Motor
-    T3CONbits.TCKPS = 0b10;     //set timer prescaler to 1:8 servo
+    T2CONbits.TCKPS = 0b01; //set timer prescaler to 1:8 Motor
+    T3CONbits.TCKPS = 0b10; //set timer prescaler to 1:8 servo
     T4CONbits.TCKPS = t4_prescaler;
     T5CONbits.TCKPS = t5_prescaler;
     PR1 = t1_period;
@@ -667,24 +674,24 @@ void start_program(void)
     PR5 = t5_period;
 
     OC1RS = 0;
-    OC1CONbits.OCM = 0b000;     //Disable Output Compare Module
-    OC1CONbits.OCTSEL = 0;      //OC1 use timer2 as counter source
-    OC1CONbits.OCM = 0b110;     //set to pwm without fault pin mode
+    OC1CONbits.OCM = 0b000; //Disable Output Compare Module
+    OC1CONbits.OCTSEL = 0;  //OC1 use timer2 as counter source
+    OC1CONbits.OCM = 0b110; //set to pwm without fault pin mode
 
     OC2RS = 0;
-    OC2CONbits.OCM = 0b000;     //Disable Output Compare Module
-    OC2CONbits.OCTSEL = 0;      //OC2 use timer2 as counter source
-    OC2CONbits.OCM = 0b110;     //set to pwm without fault pin mode
+    OC2CONbits.OCM = 0b000; //Disable Output Compare Module
+    OC2CONbits.OCTSEL = 0;  //OC2 use timer2 as counter source
+    OC2CONbits.OCM = 0b110; //set to pwm without fault pin mode
 
     OC3RS = servominpulse;
-    OC3CONbits.OCM = 0b000;     //Disable Output Compare Module
-    OC3CONbits.OCTSEL = 1;      //OC3 use timer3 as counter source
-    OC3CONbits.OCM = 0b110;     //set to pwm without fault pin mode
+    OC3CONbits.OCM = 0b000; //Disable Output Compare Module
+    OC3CONbits.OCTSEL = 1;  //OC3 use timer3 as counter source
+    OC3CONbits.OCM = 0b110; //set to pwm without fault pin mode
 
-    OC4RS = 800;
-    OC4CONbits.OCM = 0b000;     //Disable Output Compare Module
-    OC4CONbits.OCTSEL = 1;      //OC4 use timer3 as counter source
-    OC4CONbits.OCM = 0b110;     //set to pwm without fault pin mode
+    OC4RS = 900;
+    OC4CONbits.OCM = 0b000; //Disable Output Compare Module
+    OC4CONbits.OCTSEL = 1;  //OC4 use timer3 as counter source
+    OC4CONbits.OCM = 0b110; //set to pwm without fault pin mode
 
     P1TCONbits.PTEN = 0;
     PWM1CON1 = 0;
@@ -710,79 +717,79 @@ void start_program(void)
     _INT2R = 3;                             //remap external interrupts2
     __builtin_write_OSCCONL(OSCCON | 0x40); //PPS RECONFIG LOCK
 
-    QEI1CONbits.QEIM = 0b000;       // QEI1 Mode disable
-    QEI1CONbits.PCDOUT = 0;         // no direction pin out
-    QEI1CONbits.QEIM = 0b101;       // 2x ,no index
-    DFLT1CONbits.QECK = 0b000;      // clock divider Fcy/1
-    DFLT1CONbits.QEOUT = 1;         // QEI1 Enable digital filter
+    QEI1CONbits.QEIM = 0b000;  // QEI1 Mode disable
+    QEI1CONbits.PCDOUT = 0;    // no direction pin out
+    QEI1CONbits.QEIM = 0b101;  // 2x ,no index
+    DFLT1CONbits.QECK = 0b000; // clock divider Fcy/1
+    DFLT1CONbits.QEOUT = 1;    // QEI1 Enable digital filter
 
-    QEI2CONbits.QEIM = 0b000;       // QEI2 Mode disable
-    QEI2CONbits.PCDOUT = 0;         // no direction pin out
-    QEI2CONbits.QEIM = 0b101;       // 2x ,no index
-    DFLT2CONbits.QECK = 0b000;      // clock divider Fcy/1
-    DFLT2CONbits.QEOUT = 1;         // QEI2 Enable digital filter
+    QEI2CONbits.QEIM = 0b000;  // QEI2 Mode disable
+    QEI2CONbits.PCDOUT = 0;    // no direction pin out
+    QEI2CONbits.QEIM = 0b101;  // 2x ,no index
+    DFLT2CONbits.QECK = 0b000; // clock divider Fcy/1
+    DFLT2CONbits.QEOUT = 1;    // QEI2 Enable digital filter
 
-    U1MODEbits.STSEL = 0;           // 1 Stop bit
-    U1MODEbits.PDSEL = 0;           // No Parity, 8 data bits
-    U1MODEbits.BRGH = 1;            // High Speed mode
-    U1MODEbits.URXINV = 0;          // UxRX idle state is '1'
+    U1MODEbits.STSEL = 0;  // 1 Stop bit
+    U1MODEbits.PDSEL = 0;  // No Parity, 8 data bits
+    U1MODEbits.BRGH = 1;   // High Speed mode
+    U1MODEbits.URXINV = 0; // UxRX idle state is '1'
 
-    U1BRG = BRGVAL;                 // BAUD Rate Setting for 2000000
-    U1STAbits.UTXISEL0 = 0;         // Interrupt after one Tx character is transmitted
+    U1BRG = BRGVAL;         // BAUD Rate Setting for 2000000
+    U1STAbits.UTXISEL0 = 0; // Interrupt after one Tx character is transmitted
     U1STAbits.UTXISEL1 = 0;
-    U1STAbits.URXISEL = 0;          // Interrupt after one RX character is received
-    U1MODEbits.UARTEN = 1;          // Enable UART
-    U1STAbits.UTXEN = 1;            // Enable UART Tx
+    U1STAbits.URXISEL = 0; // Interrupt after one RX character is received
+    U1MODEbits.UARTEN = 1; // Enable UART
+    U1STAbits.UTXEN = 1;   // Enable UART Tx
     IEC4bits.U1EIE = 0;
 
-    DMA0REQ = 0x000C;               // Select UART1 Transmitter
+    DMA0REQ = 0x000C; // Select UART1 Transmitter
     DMA0PAD = (volatile unsigned int)&U1TXREG;
     DMA0CONbits.AMODE = 0;
     DMA0CONbits.MODE = 1;
     DMA0CONbits.DIR = 1;
     DMA0CONbits.SIZE = 1;
-    DMA0CNT = 14;                   // 15 DMA requests
+    DMA0CNT = 14; // 15 DMA requests
     DMA0STA = __builtin_dmaoffset(BufferB);
-    IFS0bits.DMA0IF = 0;            // Clear DMA Interrupt Flag
-    IEC0bits.DMA0IE = 1;            // Enable DMA interrupt
+    IFS0bits.DMA0IF = 0; // Clear DMA Interrupt Flag
+    IEC0bits.DMA0IE = 1; // Enable DMA interrupt
 
-    DMA1REQ = 0x000B;               // Select UART1 Receiver
+    DMA1REQ = 0x000B; // Select UART1 Receiver
     DMA1PAD = (volatile unsigned int)&U1RXREG;
     DMA1CONbits.AMODE = 0;
     DMA1CONbits.MODE = 0;
     DMA1CONbits.DIR = 0;
     DMA1CONbits.SIZE = 1;
-    DMA1CNT = 8;                    // 9 DMA requests
+    DMA1CNT = 8; // 9 DMA requests
     DMA1STA = __builtin_dmaoffset(BufferA);
-    IFS0bits.DMA1IF = 0;            // Clear DMA interrupt
-    IEC0bits.DMA1IE = 1;            // Enable DMA interrupt
-    DMA1CONbits.CHEN = 1;           // Enable DMA Channel
+    IFS0bits.DMA1IF = 0;  // Clear DMA interrupt
+    IEC0bits.DMA1IE = 1;  // Enable DMA interrupt
+    DMA1CONbits.CHEN = 1; // Enable DMA Channel
 
-    P1TPER = 60000;                 //period = 12500 PWM Module stepper
+    P1TPER = 60000; //period = 12500 PWM Module stepper
     P1DC2 = P1TPER;
 
-    IEC0 |= 0x0001;                 //enable interrupts0
-    IEC1 |= 0x2010;                 //enable interrupts1,2
-    INTCON2 &= 0xFFFF;              //Edge detection
-    _INT0IP = 7;                    //priority
-    _INT1IP = 6;                    //priority
-    _INT2IP = 6;                    //priority
+    IEC0 |= 0x0001;    //enable interrupts0
+    IEC1 |= 0x2010;    //enable interrupts1,2
+    INTCON2 &= 0xFFFF; //Edge detection
+    _INT0IP = 7;       //priority
+    _INT1IP = 6;       //priority
+    _INT2IP = 6;       //priority
 
-    _T1IE = 1;                      //enable interrupt for timer1
-    _T4IE = 1;                      //enable interrupt for timer4
-    _T5IE = 1;                      //enable interrupt for timer5
-    _T1IP = 5;                      //priority interrupt for timer1
-    _T4IP = 5;                      //priority interrupt for timer4
-    _T5IP = 1;                      //priority interrupt for timer5
+    _T1IE = 1; //enable interrupt for timer1
+    _T4IE = 1; //enable interrupt for timer4
+    _T5IE = 1; //enable interrupt for timer5
+    _T1IP = 5; //priority interrupt for timer1
+    _T4IP = 5; //priority interrupt for timer4
+    _T5IP = 1; //priority interrupt for timer5
 
-    AD1PCFGL = 0xFFFF;              //set analog input to digital pin
+    AD1PCFGL = 0xFFFF; //set analog input to digital pin
     TRISB = 0x0FEC;
     TRISA = 0xFFEC;
-    P1TCONbits.PTEN = 1;            //PWM Module
+    P1TCONbits.PTEN = 1; //PWM Module
     __builtin_enable_interrupts();
-    T2CONbits.TON = 1;              //enable timer2
-    T3CONbits.TON = 1;              //enable timer3
-    T4CONbits.TON = 1;              //enable timer4
+    T2CONbits.TON = 1; //enable timer2
+    T3CONbits.TON = 1; //enable timer3
+    T4CONbits.TON = 1; //enable timer4
 
     _LATA0 = 0;
     _LATA1 = 0;
@@ -816,9 +823,9 @@ int main(void)
             z = 0;
         }
 
-            //    position_enable[0] = 0;
-            //    velocity_set_point[0] = 45; // max 90 mm/s
-            //    position_set_point[0] = 0; // max 430 mm
+        //                position_enable[0] = 0;
+        //                velocity_set_point[0] = 45; // max 90 mm/s
+        //                position_set_point[0] = 0; // max 430 mm
 
         if (Em_Stop)
         {

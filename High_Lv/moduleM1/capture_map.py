@@ -223,6 +223,7 @@ if __name__ == '__main__':
         cap.set(4, 720)
         cap.set(cv2.CAP_PROP_AUTOFOCUS,0) # turn the autofocus off
         Square_Root = communication(port="com4", baudrate=500000)
+        Square_Root.Offset(offsetxy=0, offsetz=0)
         Square_Root.Go2home()
         Path = [[350, 0, 400, 0], [350, 40, 400, 0], [350, 80, 400, 0], [350, 120, 400, 0], [350, 160, 400, 0],
                 [350, 200, 400, 0], [350, 240, 400, 0], [350, 280, 400, 0], [350, 320, 400, 0], [350, 360, 400, 0], [350, 400, 400, 0]]
@@ -265,6 +266,16 @@ if __name__ == '__main__':
             elif key == ord('q') or key == ord('ๆ'):
                 cv2.destroyAllWindows()
                 break
+        Square_Root.Offset(offsetxy=20, offsetz=0)
+        Square_Root.Griping_Rod(point = 0)
+        # Square_Root.Go2home()
+        # Square_Root.Manual_Control()
+        inputtest = [[55, 320, 400, 0], [55, 320, 250, 0], [192, 308, 250, 0], [
+            315, 98, 150, 60]]
+
+
+        # [[55.0, 320.5, 0], [192, 308, 95.21328240475526], [315.0, 98.0, 0]]
+        Square_Root.Path_list(inputtest)
 
     except KeyboardInterrupt:
         print("\n\n\n\nShutdown ...\n\n\n\n")

@@ -184,10 +184,25 @@ class communication:
                     time.sleep(0.1)
                 print("Move success!!")
                 if(len(Path[i]) == 5):
+                    time.sleep(0.1)
                     if(Path[i][4] == 1):
                         self.Griper(1)
+                        while True:
+                            data = self.Readline()
+                            if(data == "griper true"):
+                                break
+                            else:
+                                self.Griper(1)
+                            time.sleep(0.1)
                     else:
                         self.Griper(0)
+                        while True:
+                            data = self.Readline()
+                            if(data == "griper false"):
+                                break
+                            else:
+                                self.Griper(0)
+                            time.sleep(0.1)
                 i += 1
 
     def Griping_Rod(self, point=0):
@@ -199,8 +214,13 @@ class communication:
         print("Moving to Griping Rod")
         if point == 0:
             print("Conner 0")
-            inputtest = [[39, 75, 400, 0, 0], [
-                39, 75, 110, 0, 1], [39, 75, 400, 0]]
+            inputtest = [[14, 60, 400, 0], [
+                14, 60, 110, 0, 1], [14, 60, 400, 0]]
+            self.Path_list(inputtest, Home=True)  # force Go2Home
+        if point == 10:
+            print("eiei Conner0")
+            inputtest = [[10, 62, 400, 0,1], [
+                10, 62, 110, 0, 0], [10, 62, 400, 0 ,0]]
             self.Path_list(inputtest, Home=True)  # force Go2Home
         time.sleep(0.5)
 
@@ -238,13 +258,15 @@ class communication:
 if __name__ == '__main__':
     try:
         Square_Root = communication(port="com4", baudrate=500000)
+        Square_Root.ResetdsPIC()
         Square_Root.Offset(offsetxy=20, offsetz=0)
-        Square_Root.Go2home()
-        Square_Root.Manual_Control()
-        # Square_Root.Griping_Rod(point = 0)
-        # inputtest = [[71, 334, 400, 0], [71, 334, 250, 0], [210, 331, 250, 90], [
-        #     322, 147, 150, 90], [350, 110, 150, 90], [350, 110, 380, 180]]
-        # Square_Root.Path_list(inputtest)
+        # Square_Root.Go2home()
+        # Square_Root.Manual_Control()
+        Square_Root.Griping_Rod(point = 0)
+        inputtest = [[55, 320, 400, 0], [55, 320, 250, 0], [192, 308, 250, 0], [
+            315, 98, 150, 60]]
+        Square_Root.Path_list(inputtest)
+        Square_Root.Griping_Rod(point = 10)
 
     except KeyboardInterrupt:
         print("\nKeyboardInterrupt!!!!\n\n\nShutdown ...\n\n\n\n")
