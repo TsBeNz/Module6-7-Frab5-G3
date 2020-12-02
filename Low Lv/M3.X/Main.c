@@ -16,7 +16,7 @@
 #define BRGVAL ((FCY / BAUDRATE) / 4) - 1
 
 #define PI 3.14159265
-#define PWM_period 16666
+#define PWM_period 10000
 #define SERVO_period 12500
 #define t1_prescaler 0b01
 #define t1_period 10000
@@ -277,7 +277,10 @@ void trajectory_gen(unsigned int x, unsigned int y, unsigned int z)
         z_before = z;
         trajectory_time_set = t;
         trajectory_finish_move = 0;
+//        sprintf(BufferB, "%.2f\n", t);
+//        dma_print();
     }
+    
 }
 
 void Griper(char input)
@@ -320,15 +323,15 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt(void)
 
 void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void)
 {
-    static float sigma_a[2] = {6, 6}; // adjustable
-    static float sigma_w[2] = {1, 1}; // adjustable
+    static float sigma_a[2] = {10, 10}; // adjustable
+    static float sigma_w[2] = {0.7, 0.7}; // adjustable
     static float p11[2] = {1.0, 1.0}; // adjustable
     static float p12[2] = {0, 0};
     static float p21[2] = {0, 0};
     static float p22[2] = {1.0, 1.0}; // adjustable
     static float cmd_velocity[2] = {0, 0};
-    static float position_kp[2] = {0.2, 0.2};
-    static int velocity_kp[2] = {360, 310}, velocity_ki[2] = {1.1, 1.3}, velocity_kd[2] = {100, 100};
+    static float position_kp[2] = {1, 1};
+    static int velocity_kp[2] = {310, 270}, velocity_ki[2] = {1.3, 1.2}, velocity_kd[2] = {30, 40};
     static float pwm_output[2] = {0, 0}, velocity_input[2] = {0, 0};
     static float trajectory_time = 0;
     float position_error[2] = {0, 0};
@@ -520,13 +523,13 @@ void __attribute__((interrupt, no_auto_psv)) _T4Interrupt(void)
         c = velocity_set_point[0];
         d = unwrapped_position[0];
         e = position_set_point[0];
-        //        T5CONbits.TON = 1;
+//                T5CONbits.TON = 1;
     }
     if (trajectory_time > trajectory_time_set)
     {
         trajectory_time = 0;
         trajectory_finish_move = 1;
-        //        T5CONbits.TON = 0;
+//                T5CONbits.TON = 0;
     }
     _T4IF = 0;
 }

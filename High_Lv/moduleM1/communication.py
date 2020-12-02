@@ -19,6 +19,7 @@ class communication:
     void Griper()\n
     void Path_list()\n
     void Griping_Rod()\n
+    void Manual_Control()\n
     """
 
     def __init__(self, port="com4", baudrate=500000):
@@ -154,7 +155,7 @@ class communication:
         if(status == 1):
             buffer = bytes([255, 68, 255, 255, 0, 0, 0, 0, 0])
         else:
-            buffer = bytes([252, 68, 255, 0, 0, 0, 0, 0, 0])
+            buffer = bytes([255, 68, 255, 0, 0, 0, 0, 0, 0])
         self.ser.write(buffer)
 
     def Path_list(self, Path=[], Home=False):
