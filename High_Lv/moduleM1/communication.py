@@ -123,25 +123,31 @@ class communication:
         """
         x += self.offsetxy
         y += self.offsetxy
+        buffer_theta =  theta
+        if buffer_theta < 0:
+            buffer_theta += 360
+        if buffer_theta > 180:
+            buffer_theta -= 180
+        print(buffer_theta)
         self.ser.write(
-            bytes([255, 51, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, theta & 0x00FF]))
+            bytes([255, 51, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, int(buffer_theta) & 0x00FF]))
         while (True):
             data = self.Readline()
             if(data == "can't move"):
                 self.ser.write(
-                    bytes([255, 52, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, theta & 0x00FF]))
+                    bytes([255, 52, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, buffer_theta & 0x00FF]))
                 if debug:
                     print("Status Error")
                 time.sleep(0.05)
             else:
                 data_list = data.split()
-                if(int(data_list[0]) == x and int(data_list[1]) == y and int(data_list[2]) == z and int(data_list[3]) == theta):
+                if(int(data_list[0]) == x and int(data_list[1]) == y and int(data_list[2]) == z and int(data_list[3]) == buffer_theta):
                     self.ser.write(
                         bytes([255, 153, 0, 0, 0, 0, 0, 0, 0]))
                     break
                 else:
                     self.ser.write(
-                        bytes([255, 52, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, theta & 0x00FF]))
+                        bytes([255, 52, x >> 8, x & 0x00FF, y >> 8, y & 0x00FF, z >> 8, z & 0x00FF, buffer_theta & 0x00FF]))
                     if debug:
                         print("Data Error")
 
@@ -177,7 +183,6 @@ class communication:
                 print("Move to " + str(Path[i]))
                 self.Move2point(int(Path[i][0]), int(
                     Path[i][1]), int(Path[i][2]), int(Path[i][3]),  debug=1)
-
                 time.sleep(0.1)  # wait low lv update status
                 while True:
                     if(int(self.Status_point()[4]) == 1):
@@ -220,38 +225,61 @@ class communication:
             self.Path_list(inputtest, Home=True)  # force Go2Home
         if point == 10:
             print("eiei Conner0")
-            inputtest = [[10, 62, 400, 0,1], [
-                10, 62, 110, 0, 0], [10, 62, 400, 0 ,0]]
+            inputtest = [[10, 60, 400, 0,1], [
+                10, 60, 110, 0, 0], [10, 60, 400, 0 ,0]]
             self.Path_list(inputtest, Home=True)  # force Go2Home
         time.sleep(0.5)
 
-    def Manual_Control(self):
-        while(True):
-            mode = input("1 for sent new position\n2 for read position\nOther of exit from manu\nManu : ")
-            if(int(mode) == 1):
-                print("input your position")
-                x_in = int(input("x : \n"))
-                while(x_in > 400):
-                    print("Position Out of Range")
-                    x_in = int(input("x : \n"))
-                    
-                y_in = int(input("y : \n"))
-                while(y_in > 400):
-                    print("Position Out of Range")
-                    y_in = int(input("y : \n"))
-                z_in = int(input("z : \n"))
-                while(z_in > 400):
-                    print("Position Out of Range")
-                    z_in = int(input("z : \n"))
-                theta_in = int(input("theta : \n"))
-                while(theta_in > 180):
-                    print("Position Out of Range")
-                    theta_in = int(input("theta : \n"))
-                self.Move2point(x=x_in, y=y_in, z=z_in, theta=theta_in)
+    def Velocity_max(self,velocity_max):
+        if velocity_max > 90:
+            velocity_max = 90
+        if velocity_max <35:
+            velocity_max = 35
+        buffer = bytes([255, 85, 255, velocity_max & 0x00FF, 0, 0, 0, 0, 0])
+        self.ser.write(buffer)
 
-            elif(int(mode) == 2):
-                print(self.Status_point())
-            else:
+    def Manual_Control(self):
+        """
+        Square_Root was move by Manual
+        ========================
+        Read Command from command line\n
+        """
+        while(True):
+            mode = input("\n\t1 for sent new position\n\t2 for read position\n\t3 Control Griper\n\t4 for set Velocity Trajectory Max\n\t9 for Set Home\n\n\tOther for exit from manu\n\nManu : ")
+            try:
+                if(int(mode) == 1):
+                    print("input your position")
+                    x_in = int(input("x : \n"))
+                    while(x_in > 400):
+                        print("Position Out of Range")
+                        x_in = int(input("x : \n"))
+                    y_in = int(input("y : \n"))
+                    while(y_in > 400):
+                        print("Position Out of Range")
+                        y_in = int(input("y : \n"))
+                    z_in = int(input("z : \n"))
+                    while(z_in > 400):
+                        print("Position Out of Range")
+                        z_in = int(input("z : \n"))
+                    theta_in = int(input("theta : \n"))
+                    while(theta_in > 360 or theta_in < -360):
+                        print("Position Out of Range")
+                        theta_in = int(input("theta : \n"))
+                    self.Move2point(x=x_in, y=y_in, z=z_in, theta=theta_in)
+                elif(int(mode) == 2):
+                    print(self.Status_point())
+                elif(int(mode) == 3):
+                    griper_buffer = int(input("Griping Rod? (y or N)").lower() == 'y')
+                    self.Griper(griper_buffer)
+                elif (int(mode) == 4):
+                    velocity_max = int(input("Velocity Trajectory Max (Range 35-90 mm/s) : \n"))
+                    self.Velocity_max(velocity_max)
+                elif(int(mode) == 9):
+                    self.Go2home()
+                else:
+                    if (input("exit manual mode? (y or N)").lower() == 'y'):
+                        break
+            except:
                 if (input("exit manual mode? (y or N)").lower() == 'y'):
                     break
 
@@ -263,6 +291,7 @@ if __name__ == '__main__':
         Square_Root.Offset(offsetxy=20, offsetz=0)
         # Square_Root.Go2home()
         # Square_Root.Manual_Control()
+        # Square_Root.Velocity_max(80)
         Square_Root.Griping_Rod(point = 0)
         inputtest = [[55, 320, 400, 0], [55, 320, 250, 0], [192, 308, 250, 0], [
             315, 98, 150, 60]]

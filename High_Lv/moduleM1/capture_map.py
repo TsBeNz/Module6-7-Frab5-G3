@@ -225,6 +225,7 @@ if __name__ == '__main__':
         Square_Root = communication(port="com4", baudrate=500000)
         Square_Root.Offset(offsetxy=0, offsetz=0)
         Square_Root.Go2home()
+        Square_Root.Velocity_max(80)
         Path = [[350, 0, 400, 0], [350, 40, 400, 0], [350, 80, 400, 0], [350, 120, 400, 0], [350, 160, 400, 0],
                 [350, 200, 400, 0], [350, 240, 400, 0], [350, 280, 400, 0], [350, 320, 400, 0], [350, 360, 400, 0], [350, 400, 400, 0]]
         # Path = [[350, 0, 400, 0], [350, 80, 400, 0], [350, 160, 400, 0], [350, 240, 400, 0], [350, 320, 400, 0],
@@ -268,6 +269,7 @@ if __name__ == '__main__':
                 break
         Square_Root.Offset(offsetxy=20, offsetz=0)
         Square_Root.Griping_Rod(point = 0)
+        Square_Root.Velocity_max(80)
         # Square_Root.Go2home()
         # Square_Root.Manual_Control()
         inputtest = [[55, 320, 400, 0], [55, 320, 250, 0], [192, 308, 250, 0], [

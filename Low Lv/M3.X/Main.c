@@ -40,7 +40,6 @@ unsigned char BufferB[50] __attribute__((space(dma)));
 volatile char Em_Stop = 0, set_home_x_f = 0, set_home_y_f = 0, griper_status = 0;
 
 volatile float z_before = 410;
-
 volatile int x = 0, y = 0, z = 0, theta = 0, update_position_trajectory = 0;
 volatile char sethomef = 0, driver = 0;
 volatile long int pre_position[2] = {0, 0};                                 // for find ds
@@ -58,6 +57,7 @@ volatile float co_trajectory[3][3] = {
 }; //[position in matix][axis]
 volatile float trajectory_time_set = 0;
 volatile char trajectory_finish_move = 1;
+volatile char trajectory_velocity_max = 60;
 volatile float a = 0, b = 0, c = 0, d = 0, e = 0;
 // volatile char next = 0;
 
@@ -248,7 +248,7 @@ void trajectory_gen(unsigned int x, unsigned int y, unsigned int z)
             {
                 ds_set[i] = setpoint[i] - unwrapped_position[i];
             }
-            tf = abs(ds_set[i]) / 42; //42
+            tf = abs(ds_set[i]) / (trajectory_velocity_max / 1.5); //42
             if (tf > t)
             {
                 t = tf;
@@ -565,7 +565,7 @@ void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
             sethomef = 1;
             break;
         case 0x22:
-            sprintf(BufferB, "%.2f %.2f %.2f %d %d\n", unwrapped_position[0] - 10, unwrapped_position[1] - 10, z_before - 15, theta, trajectory_finish_move);
+            sprintf(BufferB, "%.2f %.2f %.2f %d %d\n", unwrapped_position[0] - 10, unwrapped_position[1] - 10, z_before-10, theta, trajectory_finish_move);
             dma_print();
             break;
         case 0x33:
@@ -575,7 +575,7 @@ void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
                 y = (BufferA[4] << 8) | (BufferA[5]) + 10;
                 z = (BufferA[6] << 8) | (BufferA[7]) + 10;
                 theta = BufferA[8];
-                sprintf(BufferB, "%d %d %d %d\n", x - 10, y - 10, z - 10, theta);
+                sprintf(BufferB, "%d %d %d %d\n", x - 10, y - 10, z-10, theta);
                 dma_print();
                 stage = 1;
             }
@@ -592,7 +592,7 @@ void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
                 y = (BufferA[4] << 8) | (BufferA[5]) + 10;
                 z = (BufferA[6] << 8) | (BufferA[7]) + 10;
                 theta = BufferA[8];
-                sprintf(BufferB, "%d %d %d %d\n", x - 10, y - 10, z - 10, theta);
+                sprintf(BufferB, "%d %d %d %d\n", x - 10, y - 10, z-10, theta);
                 dma_print();
                 stage = 1;
             }
@@ -613,10 +613,16 @@ void __attribute__((interrupt, no_auto_psv)) _DMA1Interrupt(void)
                 }
                 else
                 {
-                    OC4RS = 900; //griper
+                    OC4RS = 800; //griper
                     sprintf(BufferB, "griper false\n");
                     dma_print();
                 }
+            }
+            break;
+        case 0x55:
+            if (BufferA[2] == 0xFF)
+            {
+                trajectory_velocity_max = BufferA[3];
             }
             break;
         case 0x99:
@@ -691,7 +697,7 @@ void start_program(void)
     OC3CONbits.OCTSEL = 1;  //OC3 use timer3 as counter source
     OC3CONbits.OCM = 0b110; //set to pwm without fault pin mode
 
-    OC4RS = 900;
+    OC4RS = 800;
     OC4CONbits.OCM = 0b000; //Disable Output Compare Module
     OC4CONbits.OCTSEL = 1;  //OC4 use timer3 as counter source
     OC4CONbits.OCM = 0b110; //set to pwm without fault pin mode
