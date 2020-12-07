@@ -222,7 +222,6 @@ def crop_sign(communication,count,comport,PATH):
         Square_Root.Velocity_max(80)
         Path = [[200, 200, 400, 0]]
         i = 0
-        out_images = []
         while True:
             if(i == len(Path)):
                 print("finish move!!")
@@ -270,37 +269,30 @@ def crop_sign(communication,count,comport,PATH):
                             dx,dy =  find_mid_of_aruco(
                             corners[ids.tolist().index([42])].tolist())
                             status += 1
-                        rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners[i], 0.02,mtx ,dist)
-                        aruco.drawDetectedMarkers(frame, corners,ids)  # Draw A square around the markers
-                        aruco.drawAxis(frame, mtx ,dist, rvec, tvec, 0.01)  # Draw Axis
+                        # rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners[i], 0.02,mtx ,dist)
+                        # aruco.drawDetectedMarkers(frame, corners,ids)  # Draw A square around the markers
+                        # aruco.drawAxis(frame, mtx ,dist, rvec, tvec, 0.01)  # Draw Axis
             if status == 4:
                 cv2.circle(frame, (int(ax), int(ay)), 3, (0, 255, 255), -1)
                 cv2.circle(frame, (int(bx), int(by)), 3, (0, 255, 255), -1)
                 cv2.circle(frame, (int(cx), int(cy)), 3, (0, 255, 255), -1)
                 cv2.circle(frame, (int(dx), int(dy)), 3, (0, 255, 255), -1)
-                offset_sign = 25
-                ax, ay = ax+offset_sign, ay+offset_sign
-                bx, by = bx-offset_sign, by+offset_sign
-                cx, cy = cx+offset_sign, cy-offset_sign
-                dx, dy = dx-offset_sign, dy-offset_sign
-                cv2.circle(frame, (int(ax), int(ay)), 3, (255, 255, 255), -1)
-                cv2.circle(frame, (int(bx), int(by)), 3, (255, 255, 255), -1)
-                cv2.circle(frame, (int(cx), int(cy)), 3, (255, 255, 255), -1)
-                cv2.circle(frame, (int(dx), int(dy)), 3, (255, 255, 255), -1)
                 pts1 = np.float32([[ax, ay], [bx, by], [cx, cy], [dx, dy]])
                 pts2 = np.float32([[0, 0], [200, 0], [0, 200], [
                                 200, 200]])
                 matrix = cv2.getPerspectiveTransform(pts1, pts2)
                 result = cv2.warpPerspective(frame, matrix, (200, 200))
+                result = result[25:175, 25:175] 
+                cv2.resize(result,(100,100))
+                # break
+                cv2.imshow("output world", result)
+            key = cv2.waitKey(20) & 0xFF
+            if key == 27:
+                cv2.destroyAllWindows()
                 break
-                # cv2.imshow("output world", result)
-            # key = cv2.waitKey(20) & 0xFF
-            # if key == 27:
-            #     cv2.destroyAllWindows()
-            #     break
-            # elif key == ord('q') or key == ord('ๆ'):
-            #     cv2.destroyAllWindows()
-            #     break
+            elif key == ord('q') or key == ord('ๆ'):
+                cv2.destroyAllWindows()
+                break
         #     out_images = Perspective(index_pic=i, cap=cap)
         # cv2.destroyAllWindows()
         # cv2.imshow("output world", result)
