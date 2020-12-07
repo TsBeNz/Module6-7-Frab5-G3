@@ -4,7 +4,7 @@ import numpy as np
 import os
 import time
 import glob
-# from communication import communication
+# from communication import communications
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 # import setting velue
@@ -210,13 +210,13 @@ def Perspective(debug=0, index_pic=0, cap=cv2.VideoCapture(0, cv2.CAP_DSHOW)):
             cv2.destroyAllWindows()
             break
 
-def crop_sign(communication,count):
+def crop_sign(communication,count,comport):
     try:
         cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         cap.set(3, 1280)
         cap.set(4, 720)
         cap.set(cv2.CAP_PROP_AUTOFOCUS,0) # turn the autofocus off
-        Square_Root = communication(port="com7", baudrate=500000)
+        Square_Root = communication(port=comport, baudrate=500000)
         Square_Root.Offset(offsetxy=0, offsetz=0)
         Square_Root.Go2home()
         Square_Root.Velocity_max(80)
@@ -256,61 +256,61 @@ def crop_sign(communication,count):
     except KeyboardInterrupt:
         print("\n\n\n\nShutdown ...\n\n\n\n")
 
-def capture_map(communication):
-        try:
-            cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-            cap.set(3, 1280)
-            cap.set(4, 720)
-            cap.set(cv2.CAP_PROP_AUTOFOCUS,0) # turn the autofocus off
-            Square_Root = communication(port="com7", baudrate=500000)
-            Square_Root.Offset(offsetxy=0, offsetz=0)
-            Square_Root.Go2home()
-            Square_Root.Velocity_max(80)
-            Path = [[350, 0, 400, 0], [350, 40, 400, 0], [350, 80, 400, 0], [350, 120, 400, 0], [350, 160, 400, 0],
-                    [350, 200, 400, 0], [350, 240, 400, 0], [350, 280, 400, 0], [350, 320, 400, 0], [350, 360, 400, 0], [350, 400, 400, 0]]
-            # Path = [[350, 0, 400, 0], [350, 80, 400, 0], [350, 160, 400, 0], [350, 240, 400, 0], [350, 320, 400, 0],
-            #         [350, 400, 400, 0]]
-            i = 0
-            images = []
+def capture_map(communication , comport):
+    try:
+        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        cap.set(3, 1280)
+        cap.set(4, 720)
+        cap.set(cv2.CAP_PROP_AUTOFOCUS,0) # turn the autofocus off
+        Square_Root = communication(port=comport, baudrate=500000)
+        Square_Root.Offset(offsetxy=0, offsetz=0)
+        Square_Root.Go2home()
+        Square_Root.Velocity_max(80)
+        Path = [[350, 0, 400, 0], [350, 40, 400, 0], [350, 80, 400, 0], [350, 120, 400, 0], [350, 160, 400, 0],
+                [350, 200, 400, 0], [350, 240, 400, 0], [350, 280, 400, 0], [350, 320, 400, 0], [350, 360, 400, 0], [350, 400, 400, 0]]
+        # Path = [[350, 0, 400, 0], [350, 80, 400, 0], [350, 160, 400, 0], [350, 240, 400, 0], [350, 320, 400, 0],
+        #         [350, 400, 400, 0]]
+        i = 0
+        images = []
+        while True:
+            if(i == len(Path)):
+                print("finish move!!")
+                break
+            print("Move to " + str(Path[i]))
+            Square_Root.Move2point(Path[i][0], Path[i][1], Path[i][2], 0)
+            time.sleep(0.1)
             while True:
-                if(i == len(Path)):
-                    print("finish move!!")
+                if(int(Square_Root.Status_point()[4]) == 1):
                     break
-                print("Move to " + str(Path[i]))
-                Square_Root.Move2point(Path[i][0], Path[i][1], Path[i][2], 0)
                 time.sleep(0.1)
-                while True:
-                    if(int(Square_Root.Status_point()[4]) == 1):
-                        break
-                    time.sleep(0.1)
-                print("Move success!!")
-                i += 1
-                images.append(Perspective(index_pic=i, cap=cap))
-                print("Picture : " + str(i))
-                time.sleep(2)
-            sequence = np.stack(tuple(images), axis=3)
-            result = np.median(sequence, axis=3).astype(np.uint8)
-            time_out = 0
-            cv2.destroyAllWindows()
-            result = cv2.resize(result, (400,400))
-            cv2.imwrite("D:/module67_2/utils/imgs/maps/output.png", result)
-            cv2.imshow("output world", result)
-            Square_Root.Move2point(0, 0, 400, 0)
-            while True:
-                time_out += 1
-                key = cv2.waitKey(20) & 0xFF
-                if time_out >= 500:
-                    cv2.destroyAllWindows()
-                    break
-                if key == 27:
-                    cv2.destroyAllWindows()
-                    break
-                elif key == ord('q') or key == ord('ๆ'):
-                    cv2.destroyAllWindows()
-                    break
+            print("Move success!!")
+            i += 1
+            images.append(Perspective(index_pic=i, cap=cap))
+            print("Picture : " + str(i))
+            time.sleep(2)
+        sequence = np.stack(tuple(images), axis=3)
+        result = np.median(sequence, axis=3).astype(np.uint8)
+        time_out = 0
+        cv2.destroyAllWindows()
+        result = cv2.resize(result, (400,400))
+        cv2.imwrite("D:/module67_2/utils/imgs/maps/output.png", result)
+        cv2.imshow("output world", result)
+        Square_Root.Move2point(0, 0, 400, 0)
+        while True:
+            time_out += 1
+            key = cv2.waitKey(20) & 0xFF
+            if time_out >= 500:
+                cv2.destroyAllWindows()
+                break
+            if key == 27:
+                cv2.destroyAllWindows()
+                break
+            elif key == ord('q') or key == ord('ๆ'):
+                cv2.destroyAllWindows()
+                break
 
-        except KeyboardInterrupt:
-            print("\n\n\n\nShutdown ...\n\n\n\n")
+    except KeyboardInterrupt:
+        print("\n\n\n\nShutdown ...\n\n\n\n")
 
 # if __name__ == '__main__':
 #     try:

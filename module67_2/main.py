@@ -23,11 +23,12 @@ class ScreenCommand(Screen):
         self.no_sign_img = 0
         self.sk_img = 0
         self.sign_pos = 0
+        self.comport = "com4"
         # self.path = [[319.0, 341.0, 0, 0], [319, 227, 180.0, 0], [76.5, 85.0, 0, 0]]
         # self.path = [[319.0, 341.0, 103.53500485105982, 180.0], [319, 227, 120.6768271356224, -121.11609354847653], [70.5, 77.0, 120.6768271356224, -121.11609354847653]]
         self.path = [[319.0, 345.0, 240.99099040031433, 180.0], [319, 285, 240.99099040031433, 180.0], [319, 233, 247.29729890823364, 180.0], [319, 229, 247.29729890823364, -120.96375653207352], [314, 226, 244.5945918560028, -123.69006752597979], [134, 106, 156.30630627274513, -123.9234502658317], [77.5, 68.0, 156.30630627274513, -33.923450265831704]]
     def get_map(self):
-        capture_map(communication)
+        capture_map(communication,comport = self.comport)
         self.hsv_img, self.area_img, self.no_sign_img, self.sk_img, self.sign_pos = get_map()
         self.ids.command_img.source = PATH + '/utils/imgs/ui/get_map.png'
         print('getmap')
@@ -39,7 +40,7 @@ class ScreenCommand(Screen):
     def start(self):
         if self.ids.start_stop.text == 'start':
             print('start')
-            Square_Root = communication(port="com7", baudrate=500000)
+            Square_Root = communication(port=self.comport, baudrate=500000)
             Square_Root.Offset(20)
             Square_Root.Griping_Rod(1)
             Square_Root.Path_list(self.path)
@@ -55,6 +56,7 @@ class ScreenShow(Screen):
     def __init__(self, **kwargs):
         super(ScreenShow, self).__init__(**kwargs)
         self.count = 0
+        self.comport = "com4"
 
     def select(self, fileName):
         try:
@@ -73,7 +75,7 @@ class ScreenShow(Screen):
 
     def crop(self):
         self.count += 1
-        crop_sign(communication, self.count)
+        crop_sign(communication, self.count,self.comport)
 
     def cancel(self):
         os.remove(PATH + "/utils/imgs/raw_templates/{}.png".format(self.count))

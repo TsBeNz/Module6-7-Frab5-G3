@@ -223,6 +223,11 @@ class communication:
             inputtest = [[14, 60, 400, 0], [
                 14, 60, 110, 0, 1], [14, 60, 400, 0]]
             self.Path_list(inputtest, Home=True)  # force Go2Home
+        if point == 1:
+            print("Going to Dragon")
+            inputtest = [[0, 147, 400, 0], [
+                0, 147, 135, 0, 1], [0, 147, 400, 0]]
+            self.Path_list(inputtest, Home=True)  # force Go2Home
         if point == 10:
             print("eiei Conner0")
             inputtest = [[10, 60, 400, 0,1], [
@@ -286,17 +291,19 @@ class communication:
 
 if __name__ == '__main__':
     try:
+        print("start")
         Square_Root = communication(port="com4", baudrate=500000)
         Square_Root.ResetdsPIC()
         Square_Root.Offset(offsetxy=20, offsetz=0)
-        # Square_Root.Go2home()
+        Square_Root.Go2home()
         # Square_Root.Manual_Control()
         # Square_Root.Velocity_max(80)
-        Square_Root.Griping_Rod(point = 0)
-        inputtest = [[55, 320, 400, 0], [55, 320, 250, 0], [192, 308, 250, 0], [
-            315, 98, 150, 60]]
-        Square_Root.Path_list(inputtest)
-        Square_Root.Griping_Rod(point = 10)
+        Square_Root.Griping_Rod(point = 1)
+        # inputtest = [[55, 320, 400, 0], [55, 320, 250, 0], [192, 308, 250, 0], [
+        #     315, 98, 150, 60]]
+        # while True:
+        #     Square_Root.Path_list(inputtest)
+            # Square_Root.Griping_Rod(point = 10)
 
     except KeyboardInterrupt:
         print("\nKeyboardInterrupt!!!!\n\n\nShutdown ...\n\n\n\n")
