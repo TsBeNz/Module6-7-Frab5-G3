@@ -1,0 +1,110 @@
+#:kivy 2.0.0
+#:import FadeTransition kivy.uix.screenmanager.FadeTransition
+
+<ScreenCommand>:
+    canvas.before:
+        Color:
+            rgba: (0,0,0,0)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    BoxLayout:
+        orientation: 'vertical'
+        spacing: '2dp'
+        
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint: (1, 0.15)
+            Button:
+                text: 'Show'
+                bold: True
+                size_hint: (0.2, 1)
+                on_release: app.root.current = 'show_screen'
+            Button:
+                size_hint: (0.6, 1)
+            Button:
+                text: 'Setting'
+                bold: True
+                size_hint: (0.2, 1)
+        
+        BoxLayout:
+            AsyncImage:
+                id: command_img
+                source: 'img/wait.jpg'
+        
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint:(1, 0.2)
+            
+            Button:
+                text: 'get map'
+                on_release: root.get_map()
+            Button:
+                text: 'get path'
+                on_release: root.get_path()
+            Button:
+                id: start_stop
+                text: 'start'
+                on_release: root.start()
+            Button:
+                text: 'clear'
+                on_release: root.clear()
+
+<ScreenShow>:
+    canvas.before:
+        Color:
+            rgba: (0,0,0,0)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    BoxLayout:
+        orientation: 'vertical'
+        spacing: '3dp'
+        
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint: (1, 0.15)
+            Button:
+                text: 'Command'
+                bold: True
+                size_hint: (0.2, 1)
+                on_release: app.root.current = 'command_screen'
+            Button:
+                size_hint: (0.6, 1)
+            Button:
+                text: 'Setting'
+                bold: True
+                size_hint: (0.2, 1)
+        BoxLayout:
+            orientation: 'horizontal'
+            FileChooserListView:
+                id: filechooser
+                on_selection: root.select(filechooser.selection)
+            AsyncImage:
+                id: image
+                source: ""
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint: (1, 0.15)
+            Button:
+                text: 'enable'
+                on_release: root.enable_cropping()
+            Button:
+                text: 'crop'
+                on_release: root.crop()
+            Button:
+                text: 'cancel'
+                on_release: root.cancel()
+
+<DevManager>:
+    id : manager
+    transition: FadeTransition()
+    ScreenCommand:
+        name: 'command_screen'
+    ScreenShow:
+        name: 'show_screen'
+    ScreenSetting:
+        name: 'setting_screen'
+
+        
+        
