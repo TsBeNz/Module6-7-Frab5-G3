@@ -63,6 +63,18 @@ def read_multiple_image():
         images2.append(i)
     return images2
 
+def find_mid_of_aruco(list_point=[]):
+    """
+    For Find Mid of aruco tag
+    =========================
+    """
+    ax = 0
+    bx = 0
+    ay = 0
+    by = 0
+    ax, ay = list_point[0][0]
+    bx, by = list_point[0][2]
+    return (ax+bx)//2, (ay+by)//2
 
 def Perspective(camara_source=0, setup_workspace=True , Path=[]):
     """
@@ -122,7 +134,7 @@ def Perspective(camara_source=0, setup_workspace=True , Path=[]):
             dst = dst[y:y+h, x:x+w]  # remap picture after undistort
 
             # plot point real frame
-            gray = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             aruco_dict = aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
             parameters = aruco.DetectorParameters_create() 
             corners, ids, rejected_img_points = aruco.detectMarkers(gray, aruco_dict,
@@ -131,19 +143,42 @@ def Perspective(camara_source=0, setup_workspace=True , Path=[]):
                                                                         distCoeff=dist)
             global ax,ay,bx,by,cx,cy,dx,dy
             if np.all(ids is not None):
-                if (len(ids) == 4):
-                    stage_eiei = 1
+                if (len(ids) >= 4):
+                    status = 0
                     for i in range(0, len(ids)): 
-                        eiei = corners[i].tolist()
-                        if (int((ids.tolist())[i][0])) == 3:
-                            ax,ay = eiei[0][0]
-                        elif (int((ids.tolist())[i][0])) == 1:
-                            bx,by = eiei[0][0]
-                        elif (int((ids.tolist())[i][0])) == 2:
-                            cx,cy = eiei[0][0]
-                        elif (int((ids.tolist())[i][0])) == 0:
-                            dx,dy = eiei[0][0]
+                        if (int((ids.tolist())[i][0])) == 41:
+                            ax,ay =  find_mid_of_aruco(
+                            corners[ids.tolist().index([41])].tolist())
+                            status += 1
+                        elif (int((ids.tolist())[i][0])) == 42:
+                            bx,by =  find_mid_of_aruco(
+                            corners[ids.tolist().index([42])].tolist())
+                            status += 1
+                        elif (int((ids.tolist())[i][0])) == 44:
+                            cx,cy =  find_mid_of_aruco(
+                            corners[ids.tolist().index([44])].tolist())
+                            status += 1
+                        elif (int((ids.tolist())[i][0])) == 43:
+                            dx,dy =  find_mid_of_aruco(
+                            corners[ids.tolist().index([43])].tolist())
+                            status += 1
                         rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners[i], 0.02,mtx ,dist)
+                        aruco.drawDetectedMarkers(frame, corners,ids)  # Draw A square around the markers
+                        aruco.drawAxis(frame, mtx ,dist, rvec, tvec, 0.01)  # Draw Axis
+                        
+                    if status == 4 :
+                        print("OK")
+                    # for i in range(0, len(ids)): 
+                    #     eiei = corners[i].tolist()
+                    #     if (int((ids.tolist())[i][0])) == 3:
+                    #         ax,ay = eiei[0][0]
+                    #     elif (int((ids.tolist())[i][0])) == 1:
+                    #         bx,by = eiei[0][0]
+                    #     elif (int((ids.tolist())[i][0])) == 2:
+                    #         cx,cy = eiei[0][0]
+                    #     elif (int((ids.tolist())[i][0])) == 0:
+                    #         dx,dy = eiei[0][0]
+                    #     rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners[i], 0.02,mtx ,dist)
                         # (rvec - tvec).any()  # get rid of that nasty numpy value array error
                         # aruco.drawDetectedMarkers(dst, corners,ids)  # Draw A square around the markers
                         # aruco.drawAxis(dst, mtx ,dist, rvec, tvec, 0.01)  # Draw Axis
@@ -151,7 +186,7 @@ def Perspective(camara_source=0, setup_workspace=True , Path=[]):
             # cv2.circle(dst, (int(bx), int(by)), 1, (0, 0, 255), -1)
             # cv2.circle(dst, (int(cx), int(cy)), 1, (0, 0, 255), -1)
             # cv2.circle(dst, (int(dx), int(dy)), 1, (0, 0, 255), -1)
-            cv2.imshow("undis",dst)
+            cv2.imshow("undis",frame)
 
             # Perspective Transform
             pts1 = np.float32([[ax, ay], [bx, by], [cx, cy], [dx, dy]])
@@ -245,9 +280,10 @@ def mouse_click_setup_world(event, x, y, flags, param):
 
 if __name__ == '__main__':
     try:
-        PIC = communication()
+        PIC = communication(port="com4")
         PIC.Go2home()
         inputtest = [[350,0,400,0],[350,60,400,0],[350,120,400,0],[350,180,400,0],[350,240,400,0],[350,300,400,0],[350,360,400,0],[350,420,400,0]]
+        inputtest = [[200,200,400,0]]
         Perspective(Path= inputtest)
         images = read_multiple_image()
         set_of_image_to_stack = tuple(images)

@@ -210,7 +210,7 @@ def Perspective(debug=0, index_pic=0, cap=cv2.VideoCapture(0, cv2.CAP_DSHOW)):
             cv2.destroyAllWindows()
             break
 
-def crop_sign(communication,count,comport):
+def crop_sign(communication,count,comport,PATH):
     try:
         cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         cap.set(3, 1280)
@@ -220,7 +220,7 @@ def crop_sign(communication,count,comport):
         Square_Root.Offset(offsetxy=0, offsetz=0)
         Square_Root.Go2home()
         Square_Root.Velocity_max(80)
-        Path = [[350, 230, 400, 0]]
+        Path = [[200, 200, 400, 0]]
         i = 0
         out_images = []
         while True:
@@ -237,12 +237,76 @@ def crop_sign(communication,count,comport):
             print("Move success!!")
             i += 1
             time.sleep(1)
-            out_images = Perspective(index_pic=i, cap=cap)
-        cv2.destroyAllWindows()
-        cv2.imshow("output world", out_images)
-        out_images = cv2.resize(out_images, (400,400))
-        out_images = out_images[0:100, 0:100]
-        cv2.imwrite("D:/module67_2/utils/imgs/raw_templates/{}.png".format(count), out_images)
+
+            #eiei
+        while True:
+            global ax, ay, bx, by, cx, cy, dx, dy
+            status = 0
+            ret, frame = cap.read()
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            aruco_dict = aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
+            parameters = aruco.DetectorParameters_create()
+            corners, ids, rejected_img_points = aruco.detectMarkers(gray, aruco_dict,
+                                                                    parameters=parameters,
+                                                                    cameraMatrix=mtx,
+                                                                    distCoeff=dist)
+            if np.all(ids is not None):
+                if (len(ids) >= 4):
+                    for i in range(0, len(ids)): 
+                        # conner_list = corners[i].tolist()
+                        if (int((ids.tolist())[i][0])) == 44:
+                            ax,ay =  find_mid_of_aruco(
+                            corners[ids.tolist().index([44])].tolist())
+                            status += 1
+                        elif (int((ids.tolist())[i][0])) == 43:
+                            bx,by =  find_mid_of_aruco(
+                            corners[ids.tolist().index([43])].tolist())
+                            status += 1
+                        elif (int((ids.tolist())[i][0])) == 41:
+                            cx,cy =  find_mid_of_aruco(
+                            corners[ids.tolist().index([41])].tolist())
+                            status += 1
+                        elif (int((ids.tolist())[i][0])) == 42:
+                            dx,dy =  find_mid_of_aruco(
+                            corners[ids.tolist().index([42])].tolist())
+                            status += 1
+                        rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners[i], 0.02,mtx ,dist)
+                        aruco.drawDetectedMarkers(frame, corners,ids)  # Draw A square around the markers
+                        aruco.drawAxis(frame, mtx ,dist, rvec, tvec, 0.01)  # Draw Axis
+            if status == 4:
+                cv2.circle(frame, (int(ax), int(ay)), 3, (0, 255, 255), -1)
+                cv2.circle(frame, (int(bx), int(by)), 3, (0, 255, 255), -1)
+                cv2.circle(frame, (int(cx), int(cy)), 3, (0, 255, 255), -1)
+                cv2.circle(frame, (int(dx), int(dy)), 3, (0, 255, 255), -1)
+                offset_sign = 25
+                ax, ay = ax+offset_sign, ay+offset_sign
+                bx, by = bx-offset_sign, by+offset_sign
+                cx, cy = cx+offset_sign, cy-offset_sign
+                dx, dy = dx-offset_sign, dy-offset_sign
+                cv2.circle(frame, (int(ax), int(ay)), 3, (255, 255, 255), -1)
+                cv2.circle(frame, (int(bx), int(by)), 3, (255, 255, 255), -1)
+                cv2.circle(frame, (int(cx), int(cy)), 3, (255, 255, 255), -1)
+                cv2.circle(frame, (int(dx), int(dy)), 3, (255, 255, 255), -1)
+                pts1 = np.float32([[ax, ay], [bx, by], [cx, cy], [dx, dy]])
+                pts2 = np.float32([[0, 0], [200, 0], [0, 200], [
+                                200, 200]])
+                matrix = cv2.getPerspectiveTransform(pts1, pts2)
+                result = cv2.warpPerspective(frame, matrix, (200, 200))
+                break
+                # cv2.imshow("output world", result)
+            # key = cv2.waitKey(20) & 0xFF
+            # if key == 27:
+            #     cv2.destroyAllWindows()
+            #     break
+            # elif key == ord('q') or key == ord('ๆ'):
+            #     cv2.destroyAllWindows()
+            #     break
+        #     out_images = Perspective(index_pic=i, cap=cap)
+        # cv2.destroyAllWindows()
+        # cv2.imshow("output world", result)
+        # out_images = cv2.resize(out_images, (400,400))
+        # out_images = out_images[0:100, 0:100]
+        cv2.imwrite(PATH  + "/utils/imgs/raw_templates/{}.png".format(count), result)
         Square_Root.Move2point(0, 0, 400, 0)
         # while True:
         #     key = cv2.waitKey(20) & 0xFF

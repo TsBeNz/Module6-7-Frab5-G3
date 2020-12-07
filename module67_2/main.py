@@ -75,7 +75,7 @@ class ScreenShow(Screen):
 
     def crop(self):
         self.count += 1
-        crop_sign(communication, self.count,self.comport)
+        crop_sign(communication, self.count,self.comport,PATH)
 
     def cancel(self):
         os.remove(PATH + "/utils/imgs/raw_templates/{}.png".format(self.count))
